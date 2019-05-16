@@ -582,6 +582,7 @@ bool LoadWCSim::Execute(){
 	m_data->Stores.at("ANNIEEvent")->Set("ParticleId_to_VetoTubeIds", ParticleId_to_VetoTubeIds, false);
 	m_data->Stores.at("ANNIEEvent")->Set("ParticleId_to_VetoCharge", ParticleId_to_VetoCharge, false);
 	m_data->Stores.at("ANNIEEvent")->Set("TrackId_to_MCParticleIndex",trackid_to_mcparticleindex,false);
+	m_data->Stores.at("ANNIEEvent")->Set("PrimaryMuonIndex",primarymuonindex);
 	//Things that need to be set by later tools:
 	//RawADCData
 	//CalibratedADCData
@@ -736,7 +737,7 @@ void LoadWCSim::ConstructToolChainGeometry(){
 			case 2:  CylLocString = "BottomCap"; break;
 			case 1:  CylLocString = "Barrel";    break;
 			case 4:  CylLocString = "MRD";       break;  // TODO set this as H or V paddle? And layer?
-			case 5:  CylLocString = "FACC";      break;  // TODO set layer?
+			case 5:  CylLocString = "Veto";      break;  // TODO set layer?
 			default: CylLocString = "NA";        break;  // unknown
 		}
 		Detector adet(uniquedetectorkey,
@@ -812,7 +813,7 @@ void LoadWCSim::ConstructToolChainGeometry(){
 			case 2:  CylLocString = "BottomCap"; break;
 			case 1:  CylLocString = "Barrel";    break;
 			case 4:  CylLocString = "MRD";       break;  // TODO set this as H or V paddle? And layer?
-			case 5:  CylLocString = "FACC";      break;  // TODO set layer?
+			case 5:  CylLocString = "Veto";      break;  // TODO set layer?
 			case 6:  CylLocString = "OD";        break;
 			default: CylLocString = "NA";        break;  // unknown
 		}
@@ -883,7 +884,7 @@ void LoadWCSim::ConstructToolChainGeometry(){
 			case 2:  CylLocString = "BottomCap"; break;
 			case 1:  CylLocString = "Barrel";    break;
 			case 4:  CylLocString = "MRD";       break;  // TODO set this as H or V paddle? And layer?
-			case 5:  CylLocString = "FACC";      break;  // TODO set layer?
+			case 5:  CylLocString = "Veto";      break;  // TODO set layer?
 			default: CylLocString = "NA";        break;  // unknown
 		}
 		Detector adet(uniquedetectorkey,
@@ -951,7 +952,7 @@ void LoadWCSim::ConstructToolChainGeometry(){
 			case 2:  CylLocString = "BottomCap"; break;
 			case 1:  CylLocString = "Barrel";    break;
 			case 4:  CylLocString = "MRD";       break;  // TODO set this as H or V paddle? And layer?
-			case 5:  CylLocString = "FACC";      break;  // TODO set layer?
+			case 5:  CylLocString = "Veto";      break;  // TODO set layer?
 			default: CylLocString = "NA";        break;  // unknown
 		}
 		Detector adet(uniquedetectorkey,

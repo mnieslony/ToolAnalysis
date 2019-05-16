@@ -25,8 +25,6 @@ class FindTrackLengthInWater: public Tool {
 
 
  private:
-  std::string infile;
-  TFile* file;
   TTree* regTree;
   TTree * nu_eneNEW;
   ExampleRoot* Data;
@@ -44,6 +42,23 @@ class FindTrackLengthInWater: public Tool {
   std::string outputdir="";
   bool writefile=false;
   TFile* outputFile;
+  
+  // #####
+  Geometry* anniegeom=nullptr;
+  int totalPMTs;
+  int totalLAPPDs;
+  double tank_radius;
+  double tank_halfheight;
+  
+  
+	// verbosity levels: if 'verbosity' < this level, the message type will be logged.
+	int verbosity=1;
+	int v_error=0;
+	int v_warning=1;
+	int v_message=2;
+	int v_debug=3;
+	std::string logmessage;
+	int get_ok;
 };
 
 
