@@ -461,6 +461,7 @@ template<> PyObject* SetStoreVariable<std::string>(std::string variablename, PyO
 // they are returned to python as lists / long ints. We would need some additional
 // flag from the python call to be able to determine if the user wishes to put a long or list
 // of ints into a Position, Direction or TimeClass object in the Store.
+// Suggested: Look into using SWIG to generate the necessary wrappers
 
 // ===================================
 // Generic wrapper

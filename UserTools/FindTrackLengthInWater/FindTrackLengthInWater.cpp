@@ -25,50 +25,40 @@ bool FindTrackLengthInWater::Initialise(std::string configfile, DataModel &data)
       //if(first==1 && deny_access==0){
       //    deny_access=1;
           for (int i=0; i<maxhits0;++i){
-             stringstream strs;
-             strs << i;
-             string temp_str = strs.str();
-             string X_name= "l_";
-             X_name.append(temp_str);
-             const char * xname = X_name.c_str();
-             csvfile<<xname<<",";
+             csvfile<<"l_"<<i<<",";
           }
-          for (int ii=0; ii<maxhits0;++ii){
-             stringstream strs4;
-             strs4 << ii;
-             string temp_str4 = strs4.str();
-             string T_name= "T_";
-             T_name.append(temp_str4);
-             const char * tname = T_name.c_str();
-             csvfile<<tname<<",";
+          for (int i=0; i<maxhits0;++i){
+             csvfile<<"T_"<<i<<",";
           }
-        csvfile<<"lambda_max"<<","; //first estimation of track length(using photons projection on track)
-        csvfile<<"totalPMTs"<<",";
-        csvfile<<"totalLAPPDs"<<",";
-        csvfile<<"lambda_max"<<",";
+        csvfile<<"lambda_max"<<",";  //first estimation of track length(using photons projection on track)
+        csvfile<<"totalPMTs"<<",";   // number of PMT hits, not number of pmts.
+        csvfile<<"totalLAPPDs"<<","; // number of LAPPD hits... 
+        csvfile<<"lambda_max"<<",";  // ... again...?
         csvfile<<"TrueTrackLengthInWater"<<",";
         csvfile<<"neutrinoE"<<",";
-        csvfile<<"trueKE"<<",";
+        csvfile<<"trueKE"<<",";      // of the primary muon
         csvfile<<"diffDirAbs"<<",";
         csvfile<<"TrueTrackLengthInMrd"<<",";
         csvfile<<"recoDWallR"<<",";
         csvfile<<"recoDWallZ"<<",";
-        csvfile<<"dirX"<<",";
+        csvfile<<"dirX"<<",";        // of the reconstructed muon
         csvfile<<"dirY"<<",";
         csvfile<<"dirZ"<<",";
-        csvfile<<"vtxX"<<",";
+        csvfile<<"vtxX"<<",";        // of the reconstructed event
         csvfile<<"vtxY"<<",";
         csvfile<<"vtxZ";
         csvfile<<'\n';
       // }
+  
+  // make the BoostStore to replace the csv file
+  BoostStore* energystore = new BoostStore(true,0); // type is single-event binary file
+  m_data->Stores.emplace("EnergyReco",energystore);
   
   get_ok = m_data->Stores.at("ANNIEEvent")->Header->Get("AnnieGeometry",anniegeom);
   if(not get_ok){
     Log("FindTrackLengthInWater Tool: No Geometry in ANNIEEvent!",v_error,verbosity);
     return false;
   }
-  totalPMTs   = anniegeom->GetNumTankPMTs();
-  totalLAPPDs = anniegeom->GetNumLAPPDs();
   tank_radius = anniegeom->GetTankRadius()*100.;
   tank_halfheight = anniegeom->GetTankHalfheight()*100.;
   
@@ -85,11 +75,17 @@ bool FindTrackLengthInWater::Execute(){
    std::vector<double> digitX; std::vector<double> digitY;  std::vector<double> digitZ;
    std::vector<double> digitT;
    std::map<unsigned long,std::vector<MCHit>>* MCHits=nullptr;
+   std::map<unsigned long,std::vector<MCLAPPDHit>>* MCLAPPDHits=nullptr;
    
    // Get hits from the ANNIEEvent
-   get_ok = m_data->Stores.at("ANNIEEvent")->Get("MCHits", MCHits);   // FIXME change to 'Hits' to support data
+   get_ok = m_data->Stores.at("ANNIEEvent")->Get("MCHits", MCHits);           // FIXME use 'Hits' to support data
    if(not get_ok){
       Log("FindTrackLengthInWater Tool: Failed to retrieve the MCHits!",v_error,verbosity);
+      return false;
+   }
+   get_ok = m_data->Stores.at("ANNIEEvent")->Get("MCLAPPDHits", MCLAPPDHits); // FIXME as above
+   if(not get_ok){
+      Log("FindTrackLengthInWater Tool: Failed to retrieve the MCLAPPDHits!",v_error,verbosity);
       return false;
    }
    
@@ -141,15 +137,16 @@ bool FindTrackLengthInWater::Execute(){
    TrueTrackLengthInMrd = primarymuon->GetTrackLengthInMrd();
    trueEnergy = primarymuon->GetStartEnergy();
    
-   // Get the hit information
-   // =======================
-   int nhits = MCHits->size();
+   // Get the PMT hit information
+   // ===========================
+   totalPMTs =0; // number of PMT hits in the event
 	Log("TotalLightMap Tool: Looping over PMTs with a hit",v_debug,verbosity);
 	for(std::pair<const unsigned long,std::vector<MCHit>>& nextpmt : *MCHits ){
 		// if it's not a tank PMT, ignore it
 		Detector* thepmt = anniegeom->ChannelToDetector(nextpmt.first);
 		if(thepmt->GetDetectorElement()!="Tank") continue;
 		if(thepmt->GetTankLocation()=="OD") continue;  // don't utilize OD pmts?
+		totalPMTs += nextpmt.second.size();
 		Position PMT_position = thepmt->GetPositionInTank();
 		// loop over hits on this PMT
 		// ==========================
@@ -157,18 +154,32 @@ bool FindTrackLengthInWater::Execute(){
 			double hit_time = nexthit.GetTime();
 			digitT.push_back(hit_time);
 		}
-		digitX.clear(); digitY.clear(); digitZ.clear();
 		digitX.resize(digitT.size(), PMT_position.X());
 		digitY.resize(digitT.size(), PMT_position.Y());
 		digitZ.resize(digitT.size(), PMT_position.Z());
 	}
    
-   // Declare the variables involved in track length estimation
-   // =========================================================
-   float recoDWallR2=0; float recoDWallZ2=0;
-   float diffDirAbs2=0;
-   double lambda_min = 10000000;  double lambda_max = -99999999.9; double lambda = 0;
-   double lambda_vec[1100]={0.}; double digitt[1100]={0.};
+   // Get the LAPPD hit information
+   // =============================
+   totalLAPPDs = 0; // number of LAPPD hits in the event
+	Log("TotalLightMap Tool: Looping over LAPPDs with a hit",v_debug,verbosity);
+	for(std::pair<const unsigned long,std::vector<MCLAPPDHit>>& nextlappd : *MCLAPPDHits ){
+		// don't actually need to get the LAPPD itself; all info we need is in the hit
+		totalLAPPDs += nextlappd.second.size();
+		// loop over hits on this LAPPD
+		// ============================
+		digitX.clear(); digitY.clear(); digitZ.clear();
+		for(MCLAPPDHit& nexthit : nextlappd.second){
+			double hit_time = nexthit.GetTime();
+			digitT.push_back(hit_time);
+			std::vector<double> hitpos = nexthit.GetPosition(); // in global coords
+			Position LAPPDhitpos = Position(hitpos.at(0), hitpos.at(1), hitpos.at(2));
+			LAPPDhitpos -= anniegeom->GetTankCentre();
+			digitX.push_back(LAPPDhitpos.X());
+			digitY.push_back(LAPPDhitpos.Y());
+			digitZ.push_back(LAPPDhitpos.Z());
+		}
+	}
    
    // Estimate the track length in the tank
    // =====================================
@@ -177,23 +188,23 @@ bool FindTrackLengthInWater::Execute(){
    std::cout<<"EventNumber: "<<EventNumber<<endl;
    if(recoStatus == 0){ count1++;
      if((TrueInteractionType == "QES - Weak[CC]") && TrueTrackLengthInMrd>0.){
-   	//std::cout<<"current entry: "<<EventNumber<<" with nhits: "<<nhits<<std::endl;
+   	//std::cout<<"current entry: "<<EventNumber<<" with nhits: "<<digitT.size()<<std::endl;
 
         //calculate diff dir with (0,0,1)  
         double diffDirAbs0 = TMath::ACos(dirZ)*TMath::RadToDeg();
         //cout<<"diffDirAbs0: "<<diffDirAbs0<<endl;    
-        diffDirAbs2=diffDirAbs0/90.;
+        float diffDirAbs2=diffDirAbs0/90.;
         double recoVtxR2 = vtxX*vtxX + vtxZ*vtxZ;//vtxY*vtxY;
         double recoDWallR = tank_radius-TMath::Sqrt(recoVtxR2);   // FIXME is this coordinate-system
-        double recoDWallZ = tank_halfheight-TMath::Abs(vtxY);     // dependant? Is it subtracting the tank
-        recoDWallR2      = recoDWallR/tank_radius;                // origin??
-        recoDWallZ2      = recoDWallZ/tank_halfheight;
-        
+        double recoDWallZ = tank_halfheight-TMath::Abs(vtxY);     // dependant? Is it subtracting tank origin
 
 
 	// Estimate the track length
 	// =========================
-	for(int k=0; k<nhits; k++){
+	double lambda_min = 10000000;  double lambda_max = -99999999.9; double lambda = 0;
+	double lambda_vec[1100]={0.}; double digitt[1100]={0.};   // FIXME remove once no longer used
+	std::vector<double> lambda_vector;
+	for(int k=0; k<digitT.size(); k++){
           //std::cout<<"k: "<<k<<", "<<digitT.at(k)<<std::endl;
           digitt[k]=digitT.at(k);
 
@@ -206,18 +217,19 @@ bool FindTrackLengthInWater::Execute(){
 	      lambda_max = lambda;
 	  }
           lambda_vec[k]=lambda;
+          lambda_vector.push_back(lambda);
          //m_data->Stores["ANNIEEvent"]->Set("WaterRecoTrackLength",lambda_max);
   	}
         //std::cout<<"the track length in the water tank (1st approx) is: "<<lambda_max<<std::endl;
        
        // Post-processing of variables to store
        // =====================================
-       recoDWallR2      = recoDWallR/tank_radius;
-       recoDWallZ2      = recoDWallZ/tank_halfheight;
-       float lambda_max_2     = TMath::Abs(lambda_max)/500;
-       float totalPMTs2=double(totalPMTs)/1000.;
-       float totalLAPPDs2=double(totalLAPPDs)/1000.;
-       float TrueTrackLengthInWater2 = TrueTrackLengthInWater/500.;
+       float recoDWallR2      = recoDWallR/tank_radius;
+       float recoDWallZ2      = recoDWallZ/tank_halfheight;
+//       float lambda_max_2     = TMath::Abs(lambda_max)/500;
+//       float totalPMTs2=double(totalPMTs)/1000.;
+//       float totalLAPPDs2=double(totalLAPPDs)/1000.;
+//       float TrueTrackLengthInWater2 = TrueTrackLengthInWater/500.;
        float TrueTrackLengthInMrd2 = TrueTrackLengthInMrd/200.;
        
        // Write to .csv file - including variables for track length & energy reconstruction
@@ -249,8 +261,11 @@ bool FindTrackLengthInWater::Execute(){
         
         // Put these variables in the ANNIEEvent
         // =====================================
-        m_data->Stores.at("EnergyReco")->Set("lambda_vec",lambda_vec);
-        m_data->Stores.at("EnergyReco")->Set("digitt",digitt);
+        m_data->Stores.at("EnergyReco")->Set("lambda_vec",lambda_vector);
+        m_data->Stores.at("EnergyReco")->Set("digit_ts_vec",digitt);
+        m_data->Stores.at("EnergyReco")->Set("lambda_max",lambda_max);
+        m_data->Stores.at("EnergyReco")->Set("num_pmt_hits",totalPMTs);
+        m_data->Stores.at("EnergyReco")->Set("num_lappd_hits",totalLAPPDs);
         m_data->Stores.at("EnergyReco")->Set("lambda_max",lambda_max);
         m_data->Stores.at("EnergyReco")->Set("TrueTrackLengthInWater",TrueTrackLengthInWater);
         m_data->Stores.at("EnergyReco")->Set("trueNeuE",TrueNeutrinoEnergy);
