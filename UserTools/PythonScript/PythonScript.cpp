@@ -17,7 +17,7 @@ bool PythonScript::Initialise(std::string configfile, DataModel &data){
   m_variables.Get("ExecuteFunction",executefunction);
   m_variables.Get("FinaliseFunction",finalisefunction);
 
-  gstore=m_data->Stores["DataName"];
+  gstore=m_data;
 
   // Initialising Python
   pyinit=0;

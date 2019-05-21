@@ -17,7 +17,7 @@ class Geometry : public SerialisableObject{
 	
 	public:
 	// Do we care to have the overloaded empty constructor?
-	Geometry() : NextFreeChannelKey(0), NextFreeDetectorKey(0), Version(0.), tank_centre(Position(0,0,0)), tank_radius(0.), tank_halfheight(0.), pmt_enclosed_radius(0.), pmt_enclosed_halfheight(0.), mrd_width(0.), mrd_height(0.), mrd_depth(0.), mrd_start(0.), numtankpmts(0), nummrdpmts(0), numvetopmts(0), numlappds(0), Status(geostatus::FULLY_OPERATIONAL), Detectors(std::vector<std::map<unsigned long,Detector>* >{}) {
+	Geometry() : NextFreeChannelKey(0), NextFreeDetectorKey(0), Version(0.), tank_centre(Position(0,0,0)), tank_radius(0.), tank_halfheight(0.), pmt_enclosed_radius(0.), pmt_enclosed_halfheight(0.), mrd_width(0.), mrd_height(0.), mrd_depth(0.), mrd_start(0.), numtankpmts(0), nummrdpmts(0), numvetopmts(0), numlappds(0), totaldetectorcount(0), Status(geostatus::FULLY_OPERATIONAL), Detectors(std::vector<std::map<unsigned long,Detector>* >{}) {
 		serialise=true;
 		RealDetectors.reserve(10);
 	}
@@ -58,6 +58,7 @@ class Geometry : public SerialisableObject{
 	void SetDetectors(std::vector<std::map<unsigned long,Detector>* >DetectorsIn){
 		Detectors = DetectorsIn;
 		detectorcounts.clear();
+		GetNumDetectors();
 	}
 	
 	unsigned long ConsumeNextFreeChannelKey(){
@@ -101,10 +102,18 @@ class Geometry : public SerialisableObject{
 		} else {
 			detectorcounts.at(thedetel)++;
 		}
+		totaldetectorcount++;
 		return true;
 	}
 	
-	inline int GetNumDetectors(){return Detectors.size();}  // FIXME this is the num detector SETS
+	inline int GetNumDetectors(){
+		if(totaldetectorcount==0){
+			for(std::map<unsigned long,Detector>* adetset : Detectors){
+				totaldetectorcount+= adetset->size();
+			}
+		}
+		return totaldetectorcount;
+	}
 	Detector* GetDetector(unsigned long DetectorKey);
 	Detector* ChannelToDetector(unsigned long ChannelKey);
 	Channel* GetChannel(unsigned long ChannelKey);
@@ -209,7 +218,6 @@ class Geometry : public SerialisableObject{
 	
 	bool Print(){
 		int verbose=0;
-		cout<<"Num Detectors : "<<Detectors.size()<<endl;
 //		if(verbose){    // FIXME
 //			cout<<"Detectors : {"<<endl;
 //			for(auto&& adet : Detectors){
@@ -238,6 +246,7 @@ class Geometry : public SerialisableObject{
 		cout<<"Number of veto PMTs : " << numvetopmts << endl;
 		cout<<"Number of OD PMTs : "<< numodpmts << endl;
 		cout<<"Number of LAPPDs : "<< numlappds << endl;
+		cout<<"Total number of detectors : "<< totaldetectorcount << endl;
 		
 		return true;
 	}
@@ -280,6 +289,7 @@ class Geometry : public SerialisableObject{
 	int numvetopmts;
 	int numlappds;
 	int numodpmts;
+	int totaldetectorcount;
 	double fiducialradius;
 	double fiducialcutz;
 	double fiducialcuty;
