@@ -13,42 +13,46 @@ bool FindTrackLengthInWater::Initialise(std::string configfile, DataModel &data)
   /////////////////////////////////////////////////////////////////
   // get configuration variables for this tool 
   m_variables.Get("verbosity",verbosity);
-  m_variables.Get("WriteTrackLengthToFile",writefile);
-  m_variables.Get("Outputfile",myfile);
-  csvfile.open(myfile);   
+  m_variables.Get("TrackLengthTrainingDataFile",TrackLengthTrainingDataFile);
+  m_variables.Get("TrackLengthTestingDataFile",TrackLengthTestingDataFile);
+  m_variables.Get("TrackLengthCheckpointDir",TrackLengthCheckpointDir);
+  m_variables.Get("DNNTrackLengthPredictionsFile",DNNTrackLengthPredictionsFile);
 
       std::cout<<" open file.. max number of hits: "<<maxhits0<<std::endl;  
       if(maxhits0>1100){ 
         std::cerr<<" Please change the dim of double lambda_vec[1100]={0.}; double digitt[1100]={0.}; from 1100 to max number of hits"<<std::endl; 
       }
-      //--- write to file: ---//
-      //if(first==1 && deny_access==0){
-      //    deny_access=1;
+      if(TrackLengthTrainingDataFile!="NA"){
+        // if we're not doing training, don't convert the whole run to a csv file
+        csvfile.open(TrackLengthTrainingDataFile);
+        //if(first==1 && deny_access==0){
+          //    deny_access=1;
           for (int i=0; i<maxhits0;++i){
              csvfile<<"l_"<<i<<",";
           }
           for (int i=0; i<maxhits0;++i){
              csvfile<<"T_"<<i<<",";
           }
-        csvfile<<"lambda_max"<<",";  //first estimation of track length(using photons projection on track)
-        csvfile<<"totalPMTs"<<",";   // number of PMT hits, not number of pmts.
-        csvfile<<"totalLAPPDs"<<","; // number of LAPPD hits... 
-        csvfile<<"lambda_max"<<",";  // ... again...?
-        csvfile<<"TrueTrackLengthInWater"<<",";
-        csvfile<<"neutrinoE"<<",";
-        csvfile<<"trueKE"<<",";      // of the primary muon
-        csvfile<<"diffDirAbs"<<",";
-        csvfile<<"TrueTrackLengthInMrd"<<",";
-        csvfile<<"recoDWallR"<<",";
-        csvfile<<"recoDWallZ"<<",";
-        csvfile<<"dirX"<<",";        // of the reconstructed muon
-        csvfile<<"dirY"<<",";
-        csvfile<<"dirZ"<<",";
-        csvfile<<"vtxX"<<",";        // of the reconstructed event
-        csvfile<<"vtxY"<<",";
-        csvfile<<"vtxZ";
-        csvfile<<'\n';
-      // }
+          csvfile<<"lambda_max"<<",";  //first estimation of track length(using photons projection on track)
+          csvfile<<"totalPMTs"<<",";   // number of PMT hits, not number of pmts.
+          csvfile<<"totalLAPPDs"<<","; // number of LAPPD hits... 
+          csvfile<<"lambda_max"<<",";  // ... again...?
+          csvfile<<"TrueTrackLengthInWater"<<",";
+          csvfile<<"neutrinoE"<<",";
+          csvfile<<"trueKE"<<",";      // of the primary muon
+          csvfile<<"diffDirAbs"<<",";
+          csvfile<<"TrueTrackLengthInMrd"<<",";
+          csvfile<<"recoDWallR"<<",";
+          csvfile<<"recoDWallZ"<<",";
+          csvfile<<"dirX"<<",";        // of the reconstructed muon
+          csvfile<<"dirY"<<",";
+          csvfile<<"dirZ"<<",";
+          csvfile<<"vtxX"<<",";        // of the reconstructed event
+          csvfile<<"vtxY"<<",";
+          csvfile<<"vtxZ";
+          csvfile<<'\n';
+          // }
+        }
   
   // make the BoostStore to replace the csv file
   BoostStore* energystore = new BoostStore(true,0); // type is single-event binary file
@@ -202,11 +206,9 @@ bool FindTrackLengthInWater::Execute(){
 	// Estimate the track length
 	// =========================
 	double lambda_min = 10000000;  double lambda_max = -99999999.9; double lambda = 0;
-	double lambda_vec[1100]={0.}; double digitt[1100]={0.};   // FIXME remove once no longer used
-	std::vector<double> lambda_vector;
+	std::vector<double> lambda_vector; // booststore works better with vectors
 	for(int k=0; k<digitT.size(); k++){
           //std::cout<<"k: "<<k<<", "<<digitT.at(k)<<std::endl;
-          digitt[k]=digitT.at(k);
 
 	  // Estimate length as the distance between the reconstructed vertex last photon emission point
           lambda = find_lambda(vtxX,vtxY,vtxZ,dirX,dirY,dirZ,digitX.at(k),digitY.at(k),digitZ.at(k),42.);
@@ -216,7 +218,6 @@ bool FindTrackLengthInWater::Execute(){
 	  if( lambda >= lambda_max ){
 	      lambda_max = lambda;
 	  }
-          lambda_vec[k]=lambda;
           lambda_vector.push_back(lambda);
          //m_data->Stores["ANNIEEvent"]->Set("WaterRecoTrackLength",lambda_max);
   	}
@@ -231,38 +232,43 @@ bool FindTrackLengthInWater::Execute(){
 //       float totalLAPPDs2=double(totalLAPPDs)/1000.;
 //       float TrueTrackLengthInWater2 = TrueTrackLengthInWater/500.;
        float TrueTrackLengthInMrd2 = TrueTrackLengthInMrd/200.;
+       // we need to normalise the hit time and lambda vectors to fixed dimensions to match the DNN
+       lambda_vector.resize(maxhits0);
+       digitT.resize(maxhits0);
        
        // Write to .csv file - including variables for track length & energy reconstruction
        // ==================
-        for(int i=0; i<maxhits0;++i){
-           csvfile<<lambda_vec[i]<<",";
+       if(TrackLengthTrainingDataFile!="NA"){
+         for(int i=0; i<maxhits0;++i){
+            csvfile<<lambda_vector.at(i)<<",";
+         }
+         for(int i=0; i<maxhits0;++i){
+            csvfile<<digitT.at(i)<<",";
+         }
+         csvfile<<lambda_max<<",";
+         csvfile<<totalPMTs<<",";
+         csvfile<<totalLAPPDs<<",";
+         csvfile<<lambda_max<<",";
+         csvfile<<TrueTrackLengthInWater<<",";
+         csvfile<<TrueNeutrinoEnergy<<",";
+         csvfile<<trueEnergy<<",";
+         csvfile<<diffDirAbs2<<",";
+         csvfile<<TrueTrackLengthInMrd2<<",";
+         csvfile<<recoDWallR2<<",";
+         csvfile<<recoDWallZ2<<",";
+         csvfile<<dirX<<",";
+         csvfile<<dirY<<",";
+         csvfile<<dirZ<<",";
+         csvfile<<vtxX<<",";
+         csvfile<<vtxY<<",";
+         csvfile<<vtxZ;
+         csvfile<<'\n';
         }
-        for(int i=0; i<maxhits0;++i){
-           csvfile<<digitt[i]<<",";
-        }
-        csvfile<<lambda_max<<",";
-        csvfile<<totalPMTs<<",";
-        csvfile<<totalLAPPDs<<",";
-        csvfile<<lambda_max<<",";
-        csvfile<<TrueTrackLengthInWater<<",";
-        csvfile<<TrueNeutrinoEnergy<<",";
-        csvfile<<trueEnergy<<",";
-        csvfile<<diffDirAbs2<<",";
-        csvfile<<TrueTrackLengthInMrd2<<",";
-        csvfile<<recoDWallR2<<",";
-        csvfile<<recoDWallZ2<<",";
-        csvfile<<dirX<<",";
-        csvfile<<dirY<<",";
-        csvfile<<dirZ<<",";
-        csvfile<<vtxX<<",";
-        csvfile<<vtxY<<",";
-        csvfile<<vtxZ;
-        csvfile<<'\n';
         
         // Put these variables in the ANNIEEvent
         // =====================================
         m_data->Stores.at("EnergyReco")->Set("lambda_vec",lambda_vector);
-        m_data->Stores.at("EnergyReco")->Set("digit_ts_vec",digitt);
+        m_data->Stores.at("EnergyReco")->Set("digit_ts_vec",digitT);
         m_data->Stores.at("EnergyReco")->Set("lambda_max",lambda_max);
         m_data->Stores.at("EnergyReco")->Set("num_pmt_hits",totalPMTs);
         m_data->Stores.at("EnergyReco")->Set("num_lappd_hits",totalLAPPDs);
@@ -276,6 +282,10 @@ bool FindTrackLengthInWater::Execute(){
         m_data->Stores.at("EnergyReco")->Set("recoDWallZ2",recoDWallZ2);
         m_data->Stores.at("EnergyReco")->Set("dirVec",primarymuon->GetStartDirection());
         m_data->Stores.at("EnergyReco")->Set("vtxVec",primarymuon->GetStartVertex());
+        m_data->Stores.at("EnergyReco")->Set("TrackLengthTrainingDataFile",TrackLengthTrainingDataFile);
+        m_data->Stores.at("EnergyReco")->Set("TrackLengthTestingDataFile",TrackLengthTestingDataFile);
+        m_data->Stores.at("EnergyReco")->Set("TrackLengthCheckpointDir",TrackLengthCheckpointDir);
+        m_data->Stores.at("EnergyReco")->Set("DNNTrackLengthPredictionsFile",DNNTrackLengthPredictionsFile);
         
      }
    }
@@ -338,6 +348,6 @@ double FindTrackLengthInWater::find_lambda(double xmu_rec,double ymu_rec,double 
 }
 
 bool FindTrackLengthInWater::Finalise(){
-  csvfile.close();
+  if(csvfile.is_open()) csvfile.close();
   return true;
 }

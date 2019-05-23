@@ -24,6 +24,7 @@ def Finalise():
     return 1
 
 def Execute():
+    # train the model
     # Set TF random seed to improve reproducibility
     seed = 150
     np.random.seed(seed)
@@ -62,12 +63,31 @@ def Execute():
     # Scale the training set to 0 mean and unit standard deviation.
     scaler = preprocessing.StandardScaler()
     train_x = scaler.fit_transform(train_x)
+    
+    # The easiest way to save a model during training and restore it later for prediction
+    # is via checkpoints. Simply pass a desired output directory for the checkpoint files
+    # and train calls will write checkpoints, while subsequent predict calls will retrieve them.
+    # In fact subsequent train calls will also attempt to use checkpoints to pre-load a starting
+    # point, so that training can be split into steps.
+    # XXX     We assume each training should be an independent one-shot process     XXX
+    # XXX          and wipe the checkpoint directory before training.               XXX
+    # The limitation of this method is that the Estimator defined before 'predict' calls
+    # must match that defined before 'train' calls, for the checkpoint to load correctly
+    # XXX i.e. if you change the DNNRegressor Estimator here (e.g. # hidden layers) XXX
+    # XXX  you must change it in DNNFindTrackLenghInWater_pred.py to match as well  XXX
+    # you could of course have multiple checkpoint directories for multiple trained models
+    # Retrieve the user's desired output location to store the model checkpoint
+    checkpointdir = Store.GetStoreVariable('EnergyReco','TrackLengthCheckpointDir')
+    evtnum = Store.GetStoreVariable('ANNIEEvent','EventNumber')
+    if evtnum == 0:
+        print('Clearing any existing checkpoints in...'+checkpointdir)
+        shutil.rmtree(checkpointdir, True)  # try to remove checkpoint dir, ignore errors
  
-    #Build 2 layer fully connected DNN with 10, 10 units respectively.
+    # Build a fully connected DNN with 2 hidden layers, with 70 and 20 nodes respectively.
     feature_columns = [
        tf.feature_column.numeric_column('x', shape=np.array(train_x).shape[1:])]
     regressor = tf.estimator.DNNRegressor(
-       feature_columns=feature_columns, hidden_units=[70, 20])
+       feature_columns=feature_columns, hidden_units=[70, 20],model_dir=checkpointdir)
 
     # Train.
     print('training....')
@@ -77,19 +97,18 @@ def Execute():
     train_input_fn = tf.estimator.inputs.numpy_input_fn(
           x={'x': train_x}, y=train_y, batch_size=batch_size, num_epochs=epochs_no, shuffle=False,num_threads=1)
     regressor.train(input_fn=train_input_fn,steps=1000) #1000)
-    
-    
+
     # Score accuracy
     #-----------------------------
     # if we want to score the trained model, we need a test set
     testingdatafilename = Store.GetStoreVariable('EnergyReco','TrackLengthTestingDataFile')
-    if testingdatafilename != "":
+    if testingdatafilename != 'NA':
         # open the file
         testfile = open(testdatafilename)
-        print("evts for testing in: ",trainingfile)
+        print("evts for testing in: ",testfile)
         # read into a pandas structure
         testfiledata = pd.read_csv(testfile)
-        trainingfile.close()
+        testfile.close()
         # convert to 2D numpy array
         TestingDataset = np.array(testfiledata)
         # split the numpy array up into sub-arrays
@@ -103,29 +122,7 @@ def Execute():
         # Score with tensorflow.
         scores = regressor.evaluate(input_fn=test_input_fn)
         print('MSE (tensorflow): {0:f}'.format(scores['average_loss']))
-    
-    # Save model
-    #-----------------------------
-    # combined weights + model file
-    combinedmodelfilename = Store.GetStoreVariable('EnergyReco','CombinedTrackLengthModelFile')
-    regressor.save(combinedmodelfilename) #  XXX this section is keras based
-    
-    # alternatively split model and weights files
-    #modelfilename = Store.GetStoreVariable('EnergyReco','TrackLengthModelFile')
-    #weightsfilename = Store.GetStoreVariable('EnergyReco','TrackLengthWeightsFile')
-    #model_as_json_string = regressor.to_json()
-    #modelfile = open(modelfilename, 'w')
-    #modelfile.write(model_as_json_string)
-    #modelfile.close()
-    #regressor.save_weights(weightsfilename, overwrite=True)
-    
-    # N.B. by saving the model as separate json and weights files, we could potentially load
-    # this model using lwtnn and run the prediction step with a c++ tool, rather than calling
-    # the predict python script. 
-    # BUT: to do this we also need an intermediate step where the model json file and weights file
-    # are combined with a variable description json file* to create a single lwtnn json file
-    # *created manually? the combination can be performed by a keras2json.py script
-    
+        Store.SetStoreVariable('EnergyReco','DNNTrackLengthTrainScore',scores['average_loss'])
 
     return 1
 

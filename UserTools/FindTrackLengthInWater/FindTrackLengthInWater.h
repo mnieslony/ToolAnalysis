@@ -50,6 +50,11 @@ class FindTrackLengthInWater: public Tool {
   double tank_radius;
   double tank_halfheight;
   
+  // Variables to be passed to DNNFindTrackLenghInWater
+  std::string TrackLengthTrainingDataFile;
+  std::string TrackLengthTestingDataFile;
+  std::string TrackLengthCheckpointDir;
+  std::string DNNTrackLengthPredictionsFile;
   
 	// verbosity levels: if 'verbosity' < this level, the message type will be logged.
 	int verbosity=1;

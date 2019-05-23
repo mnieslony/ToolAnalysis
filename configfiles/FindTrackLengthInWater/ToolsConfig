@@ -1,2 +1,2 @@
-FindTrackLengthInWater FindTrackLengthInWater configfiles/FindTrackLengthInWater/LoadRecoInputFile
-
+FindTrackLengthInWater FindTrackLengthInWater configfiles/FindTrackLengthInWater/FindTrackLengthInWaterConfig
+DNNTrackLength PythonScript configfiles/FindTrackLengthInWater/DNNconfig

@@ -21,17 +21,12 @@ def Initialise():
     return 1
 
 def Finalise():
-    # since we're predicting on an event-wise basis, we need to accumulate the square errors
-    # so that we can return the MSE in finalise
+    # retrieve the accumulated square errors and calculate the MSE
     sum_square_errors = Store.GetStoreVariable('EnergyReco','TrackLengthInWaterSumSquaredErrors')
-    num_events_processed = Store.GetStoreVariable('EnergyReco','EventsProcessed')
-    mean_sq_err = sum_square_errors / num_events_processed
+    evtnum = Store.GetStoreVariable('ANNIEEvent','EventNumber')
+    mean_sq_err = sum_square_errors / evtnum
     print('MSE (sklearn): {0:f}'.format(mean_sq_err))
-
-    
-
-    
-
+    # This is, of course, meaningless unless we have truth data
     
     return 1
 
@@ -74,24 +69,20 @@ def Execute():
     # rename variables for obfuscation
     test_x = features
     test_y = labels
-    
-    # load BDT model from file XXX XXX XXX XXX XXX this section of code is keras based...
-    # combined weights + model file
-    combinedmodelfilename = Store.GetStoreVariable('EnergyReco','CombinedTrackLengthModelFile')
-    regressor = load_model(combinedmodelfilename)
-    
-    # alternatively split model and weights files
-    #modelfilename = Store.GetStoreVariable('EnergyReco','TrackLengthModelFile')
-    #weightsfilename = Store.GetStoreVariable('EnergyReco','TrackLengthWeightsFile')
-    #modelfile = open(modelfilename,"r")
-    #model_as_json_string = modelfile.read()
-    #modelfile.close()
-    #regressor = model_from_json(model_as_json_string)
-    #regressor.load_weights(weightsfilename)
 
     # Scale data to 0 mean and unit standard deviation.
     scaler = preprocessing.StandardScaler()
     x_transformed = scaler.transform(test_x)
+    
+    # define BDT model, loading weight from checkpointdir
+    # XXX the Estimator definition here must match the Estimator definition in   XXX
+    # XXX the train script used to generate the checkpoints storing the weights! XXX
+    checkpointdir = Store.GetStoreVariable('EnergyReco','TrackLengthCheckpointDir')
+    print('Loading model weights from '+checkpointdir)
+    feature_columns = [
+       tf.feature_column.numeric_column('x', shape=np.array(test_x).shape[1:])]
+    regressor = tf.estimator.DNNRegressor(
+       feature_columns=feature_columns, hidden_units=[70, 20],model_dir=checkpointdir)
     
     # Do prediction
     #-----------------------------
@@ -103,37 +94,48 @@ def Execute():
     y_predicted = y_predicted.reshape(np.array(test_y).shape)
     
     
-    # Score accuracy
+    # Score accuracy (if the truth label is meaningful)
     #-----------------------------
-    # Since we only predict one event at a time here, we can't really score here
-    # the 'sklearn' metric was a MSE, which we can do ourselves: update the MSE calculation
-    sum_square_errors = Store.GetStoreVariable('EnergyReco','TrackLengthInWaterSumSquaredErrors')
+    # Update the accumulated square error for the MSE calculation (DNN accuracy score)
+    evtnum = Store.GetStoreVariable('ANNIEEvent','EventNumber')
+    if evtnum==0:
+        sum_square_errors = 0
+    else:
+        sum_square_errors = Store.GetStoreVariable('EnergyReco','TrackLengthInWaterSumSquaredErrors')
     sum_square_errors += ((y_predicted-test_y)**2.)
-    Store.SetStoreVariable('EnergyReco','TrackLengthInWaterSumSquaredErrors',sum_square_errors)
     # the final result will be calculated and printed in 'finalise'
     
     
     # Store outputs
     #-----------------------------
-    
-    # put the predicted lengths into the BoostStore
+    # put the predicted lengths and errors if we have them into the BoostStore
     Store.SetStoreVariable('EnergyReco','DNNRecoLength',y_predicted)
-    
-    # old method to append predicted track length to the input file and write to new csv
+    Store.SetStoreVariable('EnergyReco','TrackLengthInWaterSumSquaredErrors',sum_square_errors)
     #print("shapes: ", test_y.shape, ", ", y_predicted.shape)
-    #print(" saving .csv file with energy variables..")
-    data = np.concatenate((test_y, y_predicted),axis=1)
-    df=pd.DataFrame(data, columns=['TrueTrackLengthInWater','DNNRecoLength'])
-    #df_final = pd.concat([filedata,df], axis=1).drop(['lambda_max.1'], axis=1)
     
-    
+    #-----------------------------
     # Backward Compatibility
     #-----------------------------
     # append this entry to the old-style csv file, for validation while we migrate
-    ## filedata here was effectively: [features, lambdamax, labels, rest]
-    ## where 'rest' was [nuE, muE, diffDirAbs2, TrueTrackLengthInMrd2, recoDWallR2, recoDWallZ2,
-    ## dirX, dirY, dirZ, vtxX, vtxY, vtxZ]. These variables aren't normally loaded,
-    ## since they're not used in this script. Load them here to produce a complete legacy csv file...
+    # Append the predicted track length to the input file and write to new csv file
+    #print(" saving .csv file with energy variables..")
+    outputfilepath = Store.GetStoreVariable('EnergyReco','DNNTrackLengthPredictionsFile')
+    if outputfilepath == 'NA':
+        return 1  # if not saving to legacy file, just return
+
+    # combine true and predicted track lengths into a numpy array
+    #data = np.concatenate((test_y, y_predicted),axis=1)
+    # convert to pandas dataframe with headers
+    #df=pd.DataFrame(data, columns=['TrueTrackLengthInWater','DNNRecoLength'])
+    # combine with loaded file data ...
+    #df_final = pd.concat([filedata,df], axis=1).drop(['lambda_max.1'], axis=1)  # '.1' added by pandas
+    # ...
+    # but we no longer have the 'filedata' array. This array previously contained:
+    # [features, lambdamax, labels, rest]
+    # where 'rest' included
+    # [nuE, muE, diffDirAbs2, TrueTrackLengthInMrd2, recoDWallR2, recoDWallZ2, dirX, dirY, dirZ, vtxX, vtxY, vtxZ]
+    # but many of these variables are no longer loaded as they're not needed in this script.
+    # For legacy/testing, we can load them here to produce a complete csv file...
     truenue = Store.GetStoreVariable('EnergyReco','trueNeuE')
     truemue = Store.GetStoreVariable('EnergyReco','trueEnergy')
     diffdirabs = Store.GetStoreVariable('EnergyReco','diffDirAbs2')
@@ -141,15 +143,33 @@ def Execute():
     recodwallr2 = Store.GetStoreVariable('EnergyReco','recoDWallR2')
     recodwallz2 = Store.GetStoreVariable('EnergyReco','recoDWallZ2')
     dirvec = Store.GetStoreVariable('EnergyReco','dirVec')  # these are 3-element lists
-    vtxvec = Store.GetStoreVariable('EnergyReco','vtxVec')  # 
-    df_final = pd.concat([features,lambdamax,labels,truenue,truemue,diffdirabs,truemrdtracklen,recodwallr2,recodwallz2,dirvec,vtxvec,df], axis=1).drop(['lambda_max.1'], axis=1)
+    vtxvec = Store.GetStoreVariable('EnergyReco','vtxVec')  #
+    
+    # combine everything into a numpy array
+    data = np.concatenate((features,labels,truenue,truemue,diffdirabs,truemrdtracklen,recodwallr2,recodwallz2,dirvec,vtxvec,test_y, y_predicted),axis=1)
+    # convert to pandas dataframe
+    filedata=pd.DataFrame(data)
+    
+    # check if this is the first execute iteration. if so, we'll create a header row first.
+    if evtnum==0:
+        headers=[]
+        for i in range(len(hit_lambdas)):
+            headers.append('l_'+str(i))
+        for i in range(len(hit_lambdas)):
+            headers.append('T_'+str(i))
+        headers = headers+['lambda_max', 'totalPMTs', 'totalLAPPDs', 'TrueTrackLengthInWater', 'neutrinoE', 'trueKE', 'diffDirAbs', 'TrueTrackLengthInMrd', 'recoDWallR', 'recoDWallZ', 'dirX', 'dirY', 'dirZ', 'vtxX', 'vtxY', 'vtxZ']
+        # convert to pandas dataframe
+        headersframe = pd.DataFrame(headers)
+        # write the headers to file
+        headersframe.T.to_csv(outputfilepath,header=False,index=False)
+    
+    # then append this event's data row to the output file
+    df_final.to_csv(outputfilepath, float_format = '%.3f', mode='a', header=False)
 
-    #-logical tests:
+    # some quick validation tests:
     print("checking..."," df0.shape[0]: ",df0.shape[0]," len(y_predicted): ", len(y_predicted))
     assert(df0.shape[0]==len(y_predicted))
     assert(df_final.shape[0]==df.shape[0])
-
-    df_final.to_csv("../LocalFolder/vars_Ereco.csv", float_format = '%.3f', mode='a', header=False) ## append
 
     #---if asserts fails check dimensions with these print outs:
     #print("df: ",df.head())
