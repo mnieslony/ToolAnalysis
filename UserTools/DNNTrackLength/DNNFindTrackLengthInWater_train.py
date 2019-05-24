@@ -23,7 +23,7 @@ def Initialise():
 def Finalise():
     return 1
 
-def Execute():
+def Execute(Toolchain=True, trainingdatafilename=None, checkpointdir=None, testingdatafilename=None):
     # train the model
     # Set TF random seed to improve reproducibility
     seed = 150
@@ -31,7 +31,8 @@ def Execute():
 
     #--- events for training - MC events
     # get training data file path from store
-    trainingdatafilename = Store.GetStoreVariable('EnergyReco','TrackLengthTrainingDataFile')
+    if Toolchain:
+        trainingdatafilename = Store.GetStoreVariable('EnergyReco','TrackLengthTrainingDataFile')
     # open the file
     trainingfile = open(trainingdatafilename)
     print("evts for training in: ",trainingfile)
@@ -46,7 +47,7 @@ def Execute():
     # 0-2202 into 'features', element 2203 into 'lambdamax', 2204 into 'labels' and 2205+ into 'rest'
     # csv file columns are:
     # 0-1099: hit lambda values, 1100-2199: hit times, 2200: lambda_max, 2201: Num PMT hits,
-    # 2202: Num LAPPD hits, 2203: lambda_max (again), 2204: TrackLengthInWater, 2205+: nuE, muE ... etc
+    # 2202: Num LAPPD hits, 2203: lambda_max (again), 2204: TrueTrackLengthInWater, 2205+: nuE, muE ... etc
     
     # print info, initialize seed
     print( "lambdamax ", lambdamax[:2], labels[:2])
@@ -77,11 +78,10 @@ def Execute():
     # XXX  you must change it in DNNFindTrackLenghInWater_pred.py to match as well  XXX
     # you could of course have multiple checkpoint directories for multiple trained models
     # Retrieve the user's desired output location to store the model checkpoint
-    checkpointdir = Store.GetStoreVariable('EnergyReco','TrackLengthCheckpointDir')
-    evtnum = Store.GetStoreVariable('ANNIEEvent','EventNumber')
-    if evtnum == 0:
-        print('Clearing any existing checkpoints in...'+checkpointdir)
-        shutil.rmtree(checkpointdir, True)  # try to remove checkpoint dir, ignore errors
+    if Toolchain:
+        checkpointdir = Store.GetStoreVariable('EnergyReco','TrackLengthCheckpointDir')
+    print('Clearing any existing checkpoints in...'+checkpointdir)
+    shutil.rmtree(checkpointdir, True)  # try to remove checkpoint dir, ignore errors
  
     # Build a fully connected DNN with 2 hidden layers, with 70 and 20 nodes respectively.
     feature_columns = [
@@ -101,7 +101,8 @@ def Execute():
     # Score accuracy
     #-----------------------------
     # if we want to score the trained model, we need a test set
-    testingdatafilename = Store.GetStoreVariable('EnergyReco','TrackLengthTestingDataFile')
+    if Toolchain:
+        testingdatafilename = Store.GetStoreVariable('EnergyReco','TrackLengthTestingDataFile')
     if testingdatafilename != 'NA':
         # open the file
         testfile = open(testdatafilename)
@@ -122,7 +123,14 @@ def Execute():
         # Score with tensorflow.
         scores = regressor.evaluate(input_fn=test_input_fn)
         print('MSE (tensorflow): {0:f}'.format(scores['average_loss']))
-        Store.SetStoreVariable('EnergyReco','DNNTrackLengthTrainScore',scores['average_loss'])
+        if Toolchain:
+            Store.SetStoreVariable('EnergyReco','DNNTrackLengthTrainScore',scores['average_loss'])
 
     return 1
 
+if __name__ == "__main__":
+    # Make the script runnable as a standalone python script too?
+    trainingdatafilename = '../LocalFolder/NEWdata_forRecoLength_9_10MRD.csv'
+    testingdatafilename = '../LocalFolder/NEWdata_forRecoLength_0_8MRD.csv'
+    checkpointdir = '../LocalFolder/DNNFindTrackLenghInWater_Model'
+    Execute(False, trainingdatafilename, checkpointdir, testingdatafilename)

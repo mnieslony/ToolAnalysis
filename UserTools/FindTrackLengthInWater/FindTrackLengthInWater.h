@@ -25,36 +25,15 @@ class FindTrackLengthInWater: public Tool {
 
 
  private:
-  TTree* regTree;
-  TTree * nu_eneNEW;
-  ExampleRoot* Data;
-
   int maxhits0=1100;
-  long currententry;
-  long NumEvents;
   bool first=1; bool deny_access=0;
-  double diffDirAbs2=0; double diffDirAbs=0;
-  double recoDWallR2=0; double recoDWallZ2=0;
   int count1=0;
   
   std::ofstream csvfile;
-  std::string myfile;
-  std::string outputdir="";
-  bool writefile=false;
-  TFile* outputFile;
   
-  // #####
   Geometry* anniegeom=nullptr;
-  int totalPMTs;
-  int totalLAPPDs;
   double tank_radius;
   double tank_halfheight;
-  
-  // Variables to be passed to DNNFindTrackLenghInWater
-  std::string TrackLengthTrainingDataFile;
-  std::string TrackLengthTestingDataFile;
-  std::string TrackLengthCheckpointDir;
-  std::string DNNTrackLengthPredictionsFile;
   
 	// verbosity levels: if 'verbosity' < this level, the message type will be logged.
 	int verbosity=1;

@@ -18,6 +18,7 @@ verbosity 9
 # Note that the DNNFindTrackLenghInWater_train.py script will **empty and overwrite this directory**
 # While the DNNFindTrackLenghInWater_pred.py script will read the trained weights from it.
 TrackLengthCheckpointDir ../LocalFolder/DNNFindTrackLenghInWater_Model
+MaxTotalHitsToDNN 1100  # This is part of the DNN model definition! Keep constant for training & prediction!
 
 ## P.S. Don't forget to also change the DNNConfig file to specify the appropriate _pred or _train script!
 
@@ -48,3 +49,47 @@ DNNTrackLengthPredictionsFile ../LocalFolder/vars_Ereco.csv
 
 # Unused training variables should be set to suitable null values
 TrackLengthTestingDataFile NA
+
+####################################
+# BDTMuonEnergyReco Variables
+####################################
+# Same as above, these are passed to BDT_MuonEnergyReco_*.py
+BDTMuonModelFile ../LocalFolder/finalized_BDTmodel_forMuonEnergy.sav   # BDT model, weights etc
+######################
+# For Training the BDT
+######################
+MuonEnergyTrainingDataFile ../LocalFolder/vars_Ereco.csv
+MuonEnergyTestingDataFile  ../LocalFolder/vars_Ereco.csv   # XXX Use something different
+BDT_NuE_threshold 2.  # Maximum True E [GeV] used for training
+# unused prediction variables
+MuonEnergyPredictionsFile NA
+#############################
+# For Predicting with the DNN
+#############################
+MuonEnergyPredictionsFile ../LocalFolder/ErecoEmu_results.csv
+# unused training variables
+MuonEnergyTrainingDataFile NA
+MuonEnergyTestingDataFile  NA
+BDT_NuE_threshold 2.
+
+####################################
+# BDTNeutrinoEnergyReco Variables
+####################################
+# Same as above, these are passed to BDT_MuonEnergyReco_*.py
+BDTNeutrinoModelFile ../LocalFolder/finalized_BDTmodel_forNeutrinoEnergy.sav   # BDT model, weights etc
+######################
+# For Training the BDT
+######################
+NeutrinoEnergyTrainingDataFile ../LocalFolder/vars_Ereco.csv
+NeutrinoEnergyTestingDataFile  ../LocalFolder/vars_Ereco.csv   # XXX Use something different
+BDT_NuE_threshold 2.  # Maximum True E [GeV] used for training
+# unused prediction variables
+NeutrinoEnergyPredictionsFile NA
+#############################
+# For Predicting with the DNN
+#############################
+NeutrinoEnergyPredictionsFile ../LocalFolder/ErecoEnu_results.csv
+# unused training variables
+NeutrinoEnergyTrainingDataFile NA
+NeutrinoEnergyTestingDataFile  NA
+BDT_NuE_threshold 2.

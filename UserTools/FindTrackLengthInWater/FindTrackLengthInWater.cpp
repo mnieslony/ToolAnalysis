@@ -13,11 +13,52 @@ bool FindTrackLengthInWater::Initialise(std::string configfile, DataModel &data)
   /////////////////////////////////////////////////////////////////
   // get configuration variables for this tool 
   m_variables.Get("verbosity",verbosity);
+
+  // Retrieve variables from m_data to pass to the python scripts
+  // FIXME supposedly there is a way to pass variables from the python script config
+  // files to the python scripts directly, rather than using another Tool to put
+  // them into a BoostStore... 
+  // ==========================
+  // Variables to be passed to DNNFindTrackLenghInWater
+  // --------------------------------------------------
+  std::string TrackLengthTrainingDataFile;
+  std::string TrackLengthTestingDataFile;
+  std::string TrackLengthCheckpointDir;
+  std::string DNNTrackLengthPredictionsFile;
+  // retrieve from m_data
   m_variables.Get("TrackLengthTrainingDataFile",TrackLengthTrainingDataFile);
   m_variables.Get("TrackLengthTestingDataFile",TrackLengthTestingDataFile);
   m_variables.Get("TrackLengthCheckpointDir",TrackLengthCheckpointDir);
   m_variables.Get("DNNTrackLengthPredictionsFile",DNNTrackLengthPredictionsFile);
-
+  m_variables.Get("MaxTotalHitsToDNN",maxhits0);
+  // Pass to EnergyReco booststore
+  m_data->Stores.at("EnergyReco")->Set("TrackLengthTrainingDataFile",TrackLengthTrainingDataFile);
+  m_data->Stores.at("EnergyReco")->Set("TrackLengthTestingDataFile",TrackLengthTestingDataFile);
+  m_data->Stores.at("EnergyReco")->Set("DNNTrackLengthPredictionsFile",DNNTrackLengthPredictionsFile);
+  m_data->Stores.at("EnergyReco")->Set("TrackLengthCheckpointDir",TrackLengthCheckpointDir);
+  
+  // variables to be passed to BDTMuonEnergyReco
+  // -------------------------------------------
+  std::string MuonEnergyTrainingDataFile;
+  double BDT_NuE_threshold;
+  std::string BDTMuonModelFile;
+  std::string MuonEnergyTestingDataFile;
+  std::string MuonEnergyPredictionsFile;
+  // retrieve from m_data
+  m_variables.Get("MuonEnergyTrainingDataFile",MuonEnergyTrainingDataFile);  // input file
+  m_variables.Get("MuonEnergyTestingDataFile",MuonEnergyTestingDataFile);    // input file
+  m_variables.Get("MuonEnergyPredictionsFile",MuonEnergyPredictionsFile);    // output file
+  m_variables.Get("BDTMuonModelFile",BDTMuonModelFile);
+  m_variables.Get("BDT_NuE_threshold",BDT_NuE_threshold);
+  // Pass to EnergyReco booststore
+  m_data->Stores.at("EnergyReco")->Set("MuonEnergyTrainingDataFile",MuonEnergyTrainingDataFile);
+  m_data->Stores.at("EnergyReco")->Set("MuonEnergyTestingDataFile",MuonEnergyTestingDataFile);
+  m_data->Stores.at("EnergyReco")->Set("MuonEnergyPredictionsFile",MuonEnergyPredictionsFile);
+  m_data->Stores.at("EnergyReco")->Set("BDTMuonModelFile",BDTMuonModelFile);
+  m_data->Stores.at("EnergyReco")->Set("BDT_NuE_threshold",BDT_NuE_threshold);
+  
+  // ==================================
+  
       std::cout<<" open file.. max number of hits: "<<maxhits0<<std::endl;  
       if(maxhits0>1100){ 
         std::cerr<<" Please change the dim of double lambda_vec[1100]={0.}; double digitt[1100]={0.}; from 1100 to max number of hits"<<std::endl; 
@@ -143,7 +184,7 @@ bool FindTrackLengthInWater::Execute(){
    
    // Get the PMT hit information
    // ===========================
-   totalPMTs =0; // number of PMT hits in the event
+   int totalPMTs =0; // number of PMT hits in the event
 	Log("TotalLightMap Tool: Looping over PMTs with a hit",v_debug,verbosity);
 	for(std::pair<const unsigned long,std::vector<MCHit>>& nextpmt : *MCHits ){
 		// if it's not a tank PMT, ignore it
@@ -165,7 +206,7 @@ bool FindTrackLengthInWater::Execute(){
    
    // Get the LAPPD hit information
    // =============================
-   totalLAPPDs = 0; // number of LAPPD hits in the event
+   int totalLAPPDs = 0; // number of LAPPD hits in the event
 	Log("TotalLightMap Tool: Looping over LAPPDs with a hit",v_debug,verbosity);
 	for(std::pair<const unsigned long,std::vector<MCLAPPDHit>>& nextlappd : *MCLAPPDHits ){
 		// don't actually need to get the LAPPD itself; all info we need is in the hit
@@ -282,10 +323,6 @@ bool FindTrackLengthInWater::Execute(){
         m_data->Stores.at("EnergyReco")->Set("recoDWallZ2",recoDWallZ2);
         m_data->Stores.at("EnergyReco")->Set("dirVec",primarymuon->GetStartDirection());
         m_data->Stores.at("EnergyReco")->Set("vtxVec",primarymuon->GetStartVertex());
-        m_data->Stores.at("EnergyReco")->Set("TrackLengthTrainingDataFile",TrackLengthTrainingDataFile);
-        m_data->Stores.at("EnergyReco")->Set("TrackLengthTestingDataFile",TrackLengthTestingDataFile);
-        m_data->Stores.at("EnergyReco")->Set("TrackLengthCheckpointDir",TrackLengthCheckpointDir);
-        m_data->Stores.at("EnergyReco")->Set("DNNTrackLengthPredictionsFile",DNNTrackLengthPredictionsFile);
         
      }
    }

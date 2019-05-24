@@ -45,7 +45,7 @@ def Execute():
     # 0-2202 into 'features', element 2203 into 'lambdamax', 2204 into 'labels' and 2205+ into 'rest'
     ## csv file columns are:
     ## 0-1099: hit lambda values, 1100-2199: hit times, 2200: lambda_max, 2201: Num PMT hits,
-    ## 2202: Num LAPPD hits, 2203: lambda_max (again), 2204: TrackLengthInWater, 2205+: nuE, muE ... etc
+    ## 2202: Num LAPPD hits, 2203: lambda_max (again), 2204: TrueTrackLengthInWater, 2205+: nuE, muE ... etc
     
     # equivalent using BoostStore variables
     print( "--- loading input variables from store!")
@@ -55,7 +55,7 @@ def Execute():
     num_pmt_hits = Store.GetStoreVariable('EnergyReco','num_pmt_hits')
     num_lappd_hits = Store.GetStoreVariable('EnergyReco','num_lappd_hits')
     features = np.concatenate([hit_lambdas,hit_times,lambdamax,num_pmt_hits,num_lappd_hits], axis=None)
-    labels = Store.GetStoreVariable('EnergyReco','TrackLengthInWater')
+    labels = Store.GetStoreVariable('EnergyReco','TrueTrackLengthInWater')
     
     # print info
     print( "lambdamax ", lambdamax[:2], labels[:2])
@@ -122,6 +122,19 @@ def Execute():
     outputfilepath = Store.GetStoreVariable('EnergyReco','DNNTrackLengthPredictionsFile')
     if outputfilepath == 'NA':
         return 1  # if not saving to legacy file, just return
+    
+    # check if this is the first execute iteration. if so, we'll create a header row first.
+    if evtnum==0:
+        headers=['']
+        for i in range(len(hit_lambdas)):
+            headers.append('l_'+str(i))
+        for i in range(len(hit_lambdas)):
+            headers.append('T_'+str(i))
+        headers = headers+['lambda_max', 'totalPMTs', 'totalLAPPDs', 'TrueTrackLengthInWater', 'neutrinoE', 'trueKE', 'diffDirAbs', 'TrueTrackLengthInMrd', 'recoDWallR', 'recoDWallZ', 'dirX', 'dirY', 'dirZ', 'vtxX', 'vtxY', 'vtxZ']
+        # convert to pandas dataframe
+        headersframe = pd.DataFrame(headers)
+        # write the headers to file
+        headersframe.T.to_csv(outputfilepath,header=False,index=False)
 
     # combine true and predicted track lengths into a numpy array
     #data = np.concatenate((test_y, y_predicted),axis=1)
@@ -146,25 +159,12 @@ def Execute():
     vtxvec = Store.GetStoreVariable('EnergyReco','vtxVec')  #
     
     # combine everything into a numpy array
-    data = np.concatenate((features,labels,truenue,truemue,diffdirabs,truemrdtracklen,recodwallr2,recodwallz2,dirvec,vtxvec,test_y, y_predicted),axis=1)
+    data = np.concatenate((evtnum,features,labels,truenue,truemue,diffdirabs,truemrdtracklen,recodwallr2,recodwallz2,dirvec,vtxvec,test_y, y_predicted),axis=1)
     # convert to pandas dataframe
     filedata=pd.DataFrame(data)
     
-    # check if this is the first execute iteration. if so, we'll create a header row first.
-    if evtnum==0:
-        headers=[]
-        for i in range(len(hit_lambdas)):
-            headers.append('l_'+str(i))
-        for i in range(len(hit_lambdas)):
-            headers.append('T_'+str(i))
-        headers = headers+['lambda_max', 'totalPMTs', 'totalLAPPDs', 'TrueTrackLengthInWater', 'neutrinoE', 'trueKE', 'diffDirAbs', 'TrueTrackLengthInMrd', 'recoDWallR', 'recoDWallZ', 'dirX', 'dirY', 'dirZ', 'vtxX', 'vtxY', 'vtxZ']
-        # convert to pandas dataframe
-        headersframe = pd.DataFrame(headers)
-        # write the headers to file
-        headersframe.T.to_csv(outputfilepath,header=False,index=False)
-    
     # then append this event's data row to the output file
-    df_final.to_csv(outputfilepath, float_format = '%.3f', mode='a', header=False)
+    filedata.to_csv(outputfilepath, float_format = '%.3f', mode='a', header=False, index=False)
 
     # some quick validation tests:
     print("checking..."," df0.shape[0]: ",df0.shape[0]," len(y_predicted): ", len(y_predicted))
