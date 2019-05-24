@@ -20,107 +20,107 @@ from sklearn.utils import shuffle
 from sklearn import linear_model, ensemble
 from sklearn.metrics import mean_squared_error
 import pickle
-#import seaborn as sns
-
-#import ROOT
-#ROOT.gROOT.SetBatch(True)
-#from ROOT import TFile, TNtuple
-#from root_numpy import root2array, tree2array, fill_hist
-
-#-------- File with events for reconstruction:
-#--- evts for training:
-infile = "../LocalFolder/vars_Ereco.csv"
-#----------------
 
 def Initialise():
     return 1
 
 def Finalise():
- #   ROOT.gSystem.Exit(0)
     return 1
 
-def Execute():
+def Execute(Toolchain=True, trainingdatafilename=None, E_threshold=None, modelfilename=None, testingdatafilename=None):
     # Set TF random seed to improve reproducibility
     seed = 180
     np.random.seed(seed)
 
-    E_threshold = 2.
-    E_low=0
-    E_high=2000
-    div=100
-    bins = int((E_high-E_low)/div)
-    print('bins: ', bins)
+    #--- load events for training
+    if Toolchain:
+        trainingdatafilename = Store.GetStoreVariable('EnergyReco','NeutrinoEnergyTrainingDataFile')
+    print( "--- opening training file "+trainingdatafilename)
+    trainingfile = open(trainingdatafilename)
+    print("evts for training in: ",trainingfile)
+    #--- load csv file into pandas DataFrame
+    trainingfiledata=pd.read_csv(trainingfile)
+    trainingfile.close()
+    #--- Extract named columns
+    TrainingDataset=trainingfiledata[['totalPMTs','totalLAPPDs','TrueTrackLengthInWater','neutrinoE','trueKE','diffDirAbs','TrueTrackLengthInMrd','recoDWallR','recoDWallZ','dirX','dirY','dirZ','vtxX','vtxY','vtxZ','DNNRecoLength']]
+    #--- place an upper limit on Muon energies we will train on, filtering only passing rows
+    if Toolchain:
+        E_threshold = Store.GetStoreVariable('EnergyReco','BDT_NuE_threshold')
+    dfsel_train=TrainingDataset.loc[TrainingDataset['neutrinoE'] < E_threshold]
 
-    print( "--- opening file with input variables!") 
-    #--- events for training ---
-    filein = open(str(infile))
-    print("evts for training in: ",filein)
-    df00=pd.read_csv(filein)
-    df0=df00[['totalPMTs','totalLAPPDs','TrueTrackLengthInWater','neutrinoE','trueKE','diffDirAbs','TrueTrackLengthInMrd','recoDWallR','recoDWallZ','dirX','dirY','dirZ','vtxX','vtxY','vtxZ','DNNRecoLength']]
-    dfsel=df0.loc[df0['neutrinoE'] < E_threshold]
+    #--- print to check:
+    print("check training sample: ",dfsel_train.head())
+#    print(dfsel_train.iloc[5:10,0:5])
+    # check fr NaN values:
+    assert(dfsel_train.isnull().any().any()==False)
 
-    #print to check:
-    print("check training sample: ",dfsel.head())
-#    print(dfsel.iloc[5:10,0:5])
-    #check fr NaN values:
-    assert(dfsel.isnull().any().any()==False)
+    # apply normalization scalings
+    dfsel_train_normalised = pd.DataFrame([ dfsel_train['DNNRecoLength']/600., dfsel_train['TrueTrackLengthInMrd'], dfsel_train['diffDirAbs'], dfsel_train['recoDWallR'], dfsel_train['recoDWallZ'], dfsel_train['totalLAPPDs']/1000., dfsel_train['totalPMTs']/1000., dfsel_train['vtxX']/150., dfsel_train['vtxY']/200., dfsel_train['vtxZ']/150. ]).T
 
-    #--- normalisation-training sample:
-    dfsel_n = pd.DataFrame([ dfsel['DNNRecoLength']/600., dfsel['TrueTrackLengthInMrd']/200., dfsel['diffDirAbs'], dfsel['recoDWallR']/152.4, dfsel['recoDWallZ']/198., dfsel['totalLAPPDs']/1000., dfsel['totalPMTs']/1000., dfsel['vtxX']/150., dfsel['vtxY']/200., dfsel['vtxZ']/150. ]).T
-    print("chehck normalisation: ", dfsel_n.head())
+    print("check train sample normalisation: ", dfsel_train_normalised.head())
 
-    #--- prepare training & test sample for BDT:
-    arr_hi_E0 = np.array(dfsel_n[['DNNRecoLength','TrueTrackLengthInMrd','diffDirAbs','recoDWallR','recoDWallZ','totalLAPPDs','totalPMTs','vtxX','vtxY','vtxZ']])
-    arr3_hi_E0 = 1000.*np.array(dfsel[['neutrinoE']])
- 
-    #---- random split of events ----
-    rnd_indices = np.random.rand(len(arr_hi_E0)) < 0.50
-    #--- select events for training/test:
-    arr_hi_E0B = arr_hi_E0[rnd_indices]
-    arr2_hi_E_n = arr_hi_E0B #.reshape(arr_hi_E0B.shape + (-1,))
-    arr3_hi_E = arr3_hi_E0[rnd_indices]
-    #--- select events for prediction: -- in future we need to replace this with data sample!
-    evts_to_predict = arr_hi_E0[~rnd_indices]
-    evts_to_predict_n = evts_to_predict #.reshape(evts_to_predict.shape + (-1,))
-    test_data_trueKE_hi_E = arr3_hi_E0[~rnd_indices]
-
-    #printing..
-    print('events for training: ',len(arr3_hi_E),' events for predicting: ',len(test_data_trueKE_hi_E)) 
-    print('initial train shape: ',arr3_hi_E.shape," predict: ",test_data_trueKE_hi_E.shape)
-
+    #--- convert features and labels DataFrames to numpy arrays:
+    features_train = np.array(dfsel_train_normalised[['DNNRecoLength','TrueTrackLengthInMrd','diffDirAbs','recoDWallR','recoDWallZ','totalLAPPDs','totalPMTs','vtxX','vtxY','vtxZ']])
+    labels_train = 1000.*np.array(dfsel_train[['NeutrinoEnergy']])
+    print('events for training: ',len(labels_train))
+    print("features_train.shape: ",features_train.shape)
+    
     ########### BDTG ############
+    # build model
     n_estimators=1000
     params = {'n_estimators':n_estimators, 'max_depth': 50,
-              'learning_rate': 0.01, 'loss': 'lad'} 
+              'learning_rate': 0.01, 'loss': 'lad'}
     
-    print("arr2_hi_E_n.shape: ",arr2_hi_E_n.shape)
-    #--- select 70% of sample for training and 30% for testing:
-    offset = int(arr2_hi_E_n.shape[0] * 0.7) 
-    arr2_hi_E_train, arr3_hi_E_train = arr2_hi_E_n[:offset], arr3_hi_E[:offset].reshape(-1)  # train sample
-    arr2_hi_E_test, arr3_hi_E_test   = arr2_hi_E_n[offset:], arr3_hi_E[offset:].reshape(-1)  # test sample
- 
-    print("train shape: ", arr2_hi_E_train.shape," label: ",arr3_hi_E_train.shape)
-    print("test shape: ", arr2_hi_E_test.shape," label: ",arr3_hi_E_test.shape)
-    
+    # train
     print("training BDTG...")
     net_hi_E = ensemble.GradientBoostingRegressor(**params)
-    model = net_hi_E.fit(arr2_hi_E_train, arr3_hi_E_train)
+    model = net_hi_E.fit(features_train, labels_train)
     net_hi_E
 
     # save the model to disk
-    filename = 'finalized_BDTmodel_forNeutrinoEnergy.sav'
-    pickle.dump(model, open(filename, 'wb'))
+    if Toolchain:
+        modelfilename = Store.GetStoreVariable('EnergyReco','BDTNeutrinoModelFile')
+    pickle.dump(model, open(modelfilename, 'wb'))
+    
+    #############################
 
-    mse = mean_squared_error(arr3_hi_E_test, net_hi_E.predict(arr2_hi_E_test)) 
+    # Measure model metrics
+    # load testing dataset: same process as for the training sample
+    if Toolchain:
+        testingdatafilename = Store.GetStoreVariable('EnergyReco','NeutrinoEnergyTestingDataFile')
+    if testingdatafilename == 'NA':
+        return 1    # if we have no testing sample, we're done
+    
+    print( "--- Opening test sample file" + testingdatafilename)
+    testingfile = open(testingdatafilename)
+    testingfiledata=pd.read_csv(testingfile)
+    testingfile.close()
+    TestingDataset=testingfiledata[['totalPMTs','totalLAPPDs','TrueTrackLengthInWater','neutrinoE','trueKE','diffDirAbs','TrueTrackLengthInMrd','recoDWallR','recoDWallZ','dirX','dirY','dirZ','vtxX','vtxY','vtxZ','DNNRecoLength']]
+    dfsel_test=TestingDataset.loc[TestingDataset['neutrinoE'] < E_threshold]
+    print("check testing sample: ",dfsel_test.head())
+    assert(dfsel_test.isnull().any().any()==False)
+
+    #--- normalise the sample parameters:
+    dfsel_test_normalised = pd.DataFrame([ dfsel_test['DNNRecoLength']/600., dfsel_test['TrueTrackLengthInMrd'], dfsel_test['diffDirAbs'], dfsel_test['recoDWallR'], dfsel_test['recoDWallZ'], dfsel_test['totalLAPPDs']/1000., dfsel_test['totalPMTs']/1000., dfsel_test['vtxX']/150., dfsel_test['vtxY']/200., dfsel_test['vtxZ']/150. ]).T
+    print("check test sample normalisation: ", dfsel_test_normalised.head())
+
+    #--- convert features and labels to numpy arrays:
+    features_test = np.array(dfsel_test_normalised[['DNNRecoLength','TrueTrackLengthInMrd','diffDirAbs','recoDWallR','recoDWallZ','totalLAPPDs','totalPMTs','vtxX','vtxY','vtxZ']])
+    labels_test = 1000.*np.array(dfsel_test[['NeutrinoEnergy']])
+    print('events for testing: ',len(labels_test))
+    print("features_test.shape: ",features_test.shape)
+
+    #---- Predict on the test set and measure MSE
+    mse = mean_squared_error(labels_test, net_hi_E.predict(features_test))
     print("MSE: %.4f" % mse)
-    print("events at training & test samples: ", len(arr_hi_E0))
-    print("events at train sample: ", len(arr2_hi_E_train))
-    print("events at test sample: ", len(arr2_hi_E_test))
+    if Toolchain:
+        Store.SetStoreVariable('EnergyReco','NeutrinoEnergyMSE',mse)
  
     test_score = np.zeros((params['n_estimators'],), dtype=np.float64)
- 
-    for i, y_pred in enumerate(net_hi_E.staged_predict(arr2_hi_E_test)):
-        test_score[i] = net_hi_E.loss_(arr3_hi_E_test, y_pred)
+    for i, y_pred in enumerate(net_hi_E.staged_predict(features_test)):
+        test_score[i] = net_hi_E.loss_(labels_test, y_pred)
+    if Toolchain:
+        Store.SetStoreVariable('EnergyReco','NeutrinoEnergyLosses',test_score)
 
 #    fig,ax=plt.subplots(ncols=1, sharey=True)
 #    ax.plot(np.arange(params['n_estimators']) + 1, net_hi_E.train_score_, 'b-',
@@ -138,4 +138,10 @@ def Execute():
 
     return 1
 
-
+if __name__ == "__main__":
+    # Make the script runnable as a standalone python script too?
+    trainingdatafilename =  '../LocalFolder/vars_Ereco.csv'
+    testingdatafilename = '../LocalFolder/vars_Ereco.csv'
+    modelfilename = '../LocalFolder/finalized_BDTmodel_forNeutrinoEnergy.sav'
+    E_threshold=2.
+    Execute(False, trainingdatafilename, E_threshold, modelfilename, testingdatafilename)

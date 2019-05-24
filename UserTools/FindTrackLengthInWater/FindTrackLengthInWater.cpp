@@ -279,7 +279,7 @@ bool FindTrackLengthInWater::Execute(){
        
        // Write to .csv file - including variables for track length & energy reconstruction
        // ==================
-       if(TrackLengthTrainingDataFile!="NA"){
+       if(csvfile.is_open()){
          for(int i=0; i<maxhits0;++i){
             csvfile<<lambda_vector.at(i)<<",";
          }
