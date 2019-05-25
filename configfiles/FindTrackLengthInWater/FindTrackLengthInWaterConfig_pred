@@ -1,0 +1,33 @@
+#FindTrackLengthInWater Config File
+# all variables retrieved with m_variables.Get() must be defined here!
+##################################
+# FindTrackLengthInWater Variables
+##################################
+verbosity 9
+
+####################################
+# DNNFindTrackLenghInWater Variables
+####################################
+TrackLengthCheckpointDir ../LocalFolder/DNNFindTrackLenghInWater_Model  # DNN model weights from training
+MaxTotalHitsToDNN 1100                                                  # Must match that used for training
+TrackLengthTrainingDataFile NA                                          # NA to not overwrite data used for training
+TrackLengthPredictionsFile ../LocalFolder/vars_Ereco.csv                # legacy ouput, use NA to not write
+TrackLengthTestingDataFile NA                                           # unused in prediction script
+
+####################################
+# BDTMuonEnergyReco Variables
+####################################
+BDTMuonModelFile ../LocalFolder/BDTmodel_forMuonEnergy.sav             # BDT model, weights etc from training
+MuonEnergyPredictionsFile ../LocalFolder/ErecoEmu_results.csv          # legacy ouput, use NA to not write
+MuonEnergyTrainingDataFile NA                                          # unused in prediction script
+MuonEnergyTestingDataFile  NA                                          # unused in prediction script
+BDT_NuE_threshold 2.                                                   # unused in prediction script
+
+####################################
+# BDTNeutrinoEnergyReco Variables
+####################################
+BDTNeutrinoModelFile ../LocalFolder/BDTmodel_forNeutrinoEnergy.sav     # BDT model, weights etc
+NeutrinoEnergyPredictionsFile ../LocalFolder/ErecoEnu_results.csv      # legacy ouput, use NA to not write
+NeutrinoEnergyTrainingDataFile NA                                      # unused in prediction script
+NeutrinoEnergyTestingDataFile  NA                                      # unused in prediction script
+BDT_NuE_threshold 2.                                                   # unused in prediction script

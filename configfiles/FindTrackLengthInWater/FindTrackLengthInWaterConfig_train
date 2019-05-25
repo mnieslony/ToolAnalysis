@@ -1,0 +1,33 @@
+#FindTrackLengthInWater Config File
+# all variables retrieved with m_variables.Get() must be defined here!
+##################################
+# FindTrackLengthInWater Variables
+##################################
+verbosity 9
+
+####################################
+# DNNFindTrackLenghInWater Variables
+####################################
+TrackLengthCheckpointDir ../LocalFolder/DNNFindTrackLenghInWater_Model            # DNN model, weights etc
+MaxTotalHitsToDNN 1100                                                            # Part of the DNN model definition
+TrackLengthTrainingDataFile ../LocalFolder/NEWdata_forRecoLength_9_10MRD.csv      #
+TrackLengthTestingDataFile ../LocalFolder/NEWdata_forRecoLength_0_8MRD.csv        # use 'NA' to skip generation of metrics
+TrackLengthPredictionsFile NA                                                     # unused in training
+
+####################################
+# BDTMuonEnergyReco Variables
+####################################
+BDTMuonModelFile ../LocalFolder/BDTmodel_forMuonEnergy.sav                        # BDT model, weights etc
+MuonEnergyTrainingDataFile ../LocalFolder/vars_Ereco.csv
+MuonEnergyTestingDataFile  NA                                                     # Use 'NA' to skip generation of metrics
+BDT_NuE_threshold 2.                                                              # Maximum True E used for training [GeV]
+MuonEnergyPredictionsFile NA                                                      # unused in training
+
+####################################
+# BDTNeutrinoEnergyReco Variables
+####################################
+BDTNeutrinoModelFile ../LocalFolder/BDTmodel_forNeutrinoEnergy.sav                # BDT model, weights etc
+NeutrinoEnergyTrainingDataFile ../LocalFolder/vars_Ereco.csv                      #
+NeutrinoEnergyTestingDataFile  NA                                                 # use 'NA' to skip generation of metrics
+BDT_NuE_threshold 2.                                                              # Maximum True E used for training [GeV]
+NeutrinoEnergyPredictionsFile NA                                                  # unused in training

@@ -119,7 +119,7 @@ def Execute():
     # append this entry to the old-style csv file, for validation while we migrate
     # Append the predicted track length to the input file and write to new csv file
     #print(" saving .csv file with energy variables..")
-    outputfilepath = Store.GetStoreVariable('EnergyReco','DNNTrackLengthPredictionsFile')
+    outputfilepath = Store.GetStoreVariable('EnergyReco','TrackLengthPredictionsFile')
     if outputfilepath == 'NA':
         return 1  # if not saving to legacy file, just return
     

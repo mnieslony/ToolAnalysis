@@ -24,17 +24,17 @@ bool FindTrackLengthInWater::Initialise(std::string configfile, DataModel &data)
   std::string TrackLengthTrainingDataFile;
   std::string TrackLengthTestingDataFile;
   std::string TrackLengthCheckpointDir;
-  std::string DNNTrackLengthPredictionsFile;
+  std::string TrackLengthPredictionsFile;
   // retrieve from m_data
   m_variables.Get("TrackLengthTrainingDataFile",TrackLengthTrainingDataFile);
   m_variables.Get("TrackLengthTestingDataFile",TrackLengthTestingDataFile);
   m_variables.Get("TrackLengthCheckpointDir",TrackLengthCheckpointDir);
-  m_variables.Get("DNNTrackLengthPredictionsFile",DNNTrackLengthPredictionsFile);
+  m_variables.Get("TrackLengthPredictionsFile",TrackLengthPredictionsFile);
   m_variables.Get("MaxTotalHitsToDNN",maxhits0);
   // Pass to EnergyReco booststore
   m_data->Stores.at("EnergyReco")->Set("TrackLengthTrainingDataFile",TrackLengthTrainingDataFile);
   m_data->Stores.at("EnergyReco")->Set("TrackLengthTestingDataFile",TrackLengthTestingDataFile);
-  m_data->Stores.at("EnergyReco")->Set("DNNTrackLengthPredictionsFile",DNNTrackLengthPredictionsFile);
+  m_data->Stores.at("EnergyReco")->Set("TrackLengthPredictionsFile",TrackLengthPredictionsFile);
   m_data->Stores.at("EnergyReco")->Set("TrackLengthCheckpointDir",TrackLengthCheckpointDir);
   
   // variables to be passed to BDTMuonEnergyReco
