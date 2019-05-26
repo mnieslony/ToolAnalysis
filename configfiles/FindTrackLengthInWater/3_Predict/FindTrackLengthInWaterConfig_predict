@@ -1,0 +1,37 @@
+#FindTrackLengthInWater Config File
+# all variables retrieved with m_variables.Get() must be defined here!
+##################################
+# FindTrackLengthInWater Variables
+##################################
+verbosity 9
+
+###########################################################################################################
+##                                  Step Three: Predict with DNN and BDTs                                ##
+###########################################################################################################
+
+####################################
+# DNNFindTrackLenghInWater Variables
+####################################
+TrackLengthCheckpointDir ../LocalFolder/DNNFindTrackLenghInWater_Model            # DNN model, weights etc
+MaxTotalHitsToDNN 1100                                                            # Part of the DNN model definition
+TrackLengthTrainingDataFile NA                                                    # unused in prediction
+TrackLengthTestingDataFile NA                                                     # unused in prediction
+TrackLengthPredictionsFile NA                                                     # Do not overwrite BDT training file
+
+####################################
+# BDTMuonEnergyReco Variables
+####################################
+BDTMuonModelFile ../LocalFolder/BTDmodel_forMuonEnergy.sav                        # BDT model, weights etc
+MuonEnergyTrainingDataFile NA                                                     # unused in prediction
+MuonEnergyTestingDataFile NA                                                      # unused in prediction
+BDT_NuE_threshold 2.                                                              # Maximum True E used for training [GeV]
+MuonEnergyPredictionsFile ../LocalFolder/wcsim_29_03_19_ANNIEp2v6_muonsonly_nodigit_BNB_Water_10k_22-05-17_BDTNu_predictions_output.csv  # generate legacy file
+
+####################################
+# BDTNeutrinoEnergyReco Variables
+####################################
+BDTNeutrinoModelFile ../LocalFolder/BDTmodel_forNeutrinoEnergy.sav                # BDT model, weights etc
+NeutrinoEnergyTrainingDataFile NA                                                 # unused in prediction
+NeutrinoEnergyTestingDataFile  NA                                                 # unused in prediction
+BDT_NuE_threshold 2.                                                              # Maximum True E used for training [GeV]
+NeutrinoEnergyPredictionsFile ../LocalFolder/wcsim_29_03_19_ANNIEp2v6_muonsonly_nodigit_BNB_Water_10k_22-05-17_BDTMu_predictions_output.csv    # legacy csv output

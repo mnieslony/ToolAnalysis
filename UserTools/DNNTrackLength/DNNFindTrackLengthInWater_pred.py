@@ -130,7 +130,7 @@ def Execute():
             headers.append('l_'+str(i))
         for i in range(len(hit_lambdas)):
             headers.append('T_'+str(i))
-        headers = headers+['lambda_max', 'totalPMTs', 'totalLAPPDs', 'TrueTrackLengthInWater', 'neutrinoE', 'trueKE', 'diffDirAbs', 'TrueTrackLengthInMrd', 'recoDWallR', 'recoDWallZ', 'dirX', 'dirY', 'dirZ', 'vtxX', 'vtxY', 'vtxZ']
+        headers = headers+['lambda_max', 'totalPMTs', 'totalLAPPDs', 'TrueTrackLengthInWater', 'neutrinoE', 'trueKE', 'diffDirAbs', 'TrueTrackLengthInMrd', 'recoDWallR', 'recoDWallZ', 'dirX', 'dirY', 'dirZ', 'vtxX', 'vtxY', 'vtxZ','TrueTrackLengthInWater','DNNRecoLength']
         # convert to pandas dataframe
         headersframe = pd.DataFrame(headers)
         # write the headers to file

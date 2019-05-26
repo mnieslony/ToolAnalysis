@@ -150,6 +150,7 @@ bool FindTrackLengthInWater::Execute(){
    dirY = theExtendedVertex.GetDirection().Y();
    dirZ = theExtendedVertex.GetDirection().Z();
    
+   /*
    // Get neutrino info from GenieEvent TODO FIXME
    get_ok = m_data->Stores.at("GenieEvent")->Get("TrueNeutrinoEnergy", TrueNeutrinoEnergy);
    if(not get_ok){
@@ -161,6 +162,11 @@ bool FindTrackLengthInWater::Execute(){
    	Log("FindTrackLengthInWater Tool: Failed to retrieve the TrueInteractionType!",v_error,verbosity);
    	return false;
    }
+   */
+   // XXX FIXME PLACEHOLDERS UNTIL WE HAVE GENIE INFO XXX
+   TrueNeutrinoEnergy =1.;
+   TrueInteractionType = "QES - Weak[CC]";
+   
    
    // Get the primary muon information
    // ================================
@@ -232,6 +238,8 @@ bool FindTrackLengthInWater::Execute(){
    get_ok = m_data->Stores.at("ANNIEEvent")->Get("EventNumber", EventNumber);
    std::cout<<"EventNumber: "<<EventNumber<<endl;
    if(recoStatus == 0){ count1++;
+     // XXX FIXME XXX only if Monte Carlo!
+     // XXX What about for measuring error on reconstructed energy for other event toplogies? XXX
      if((TrueInteractionType == "QES - Weak[CC]") && TrueTrackLengthInMrd>0.){
    	//std::cout<<"current entry: "<<EventNumber<<" with nhits: "<<digitT.size()<<std::endl;
 
@@ -319,8 +327,10 @@ bool FindTrackLengthInWater::Execute(){
         m_data->Stores.at("EnergyReco")->Set("trueE",trueEnergy);
         m_data->Stores.at("EnergyReco")->Set("diffDirAbs2",diffDirAbs2);
         m_data->Stores.at("EnergyReco")->Set("TrueTrackLengthInMrd2",TrueTrackLengthInMrd2);
+        // FIXME naming, if training are these actually trueDWallR2?
         m_data->Stores.at("EnergyReco")->Set("recoDWallR2",recoDWallR2);
         m_data->Stores.at("EnergyReco")->Set("recoDWallZ2",recoDWallZ2);
+        // FIXME we should pass RecoVtx and RecoDir ... unless training?
         m_data->Stores.at("EnergyReco")->Set("dirVec",primarymuon->GetStartDirection());
         m_data->Stores.at("EnergyReco")->Set("vtxVec",primarymuon->GetStartVertex());
         

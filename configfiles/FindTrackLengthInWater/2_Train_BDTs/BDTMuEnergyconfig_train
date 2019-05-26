@@ -1,5 +1,5 @@
 ############### Training #################
-PythonScript BDT_NeutrinoEnergyReco_train
+PythonScript BDT_MuonEnergyReco_train
 # Note: If we're going to train immediately following the FindTrackLengthInWater tool,
 # we need to switch Execute and Finalise functions. This makes the tool do nothing while
 # the input csv file is filled during the Execute loops, then train the BDT model

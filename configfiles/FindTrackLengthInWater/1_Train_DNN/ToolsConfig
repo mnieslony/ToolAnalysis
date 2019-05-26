@@ -1,0 +1,3 @@
+# train machine learning algorithms
+FindTrackLengthInWater FindTrackLengthInWater configfiles/FindTrackLengthInWater/1_Train_DNN/FindTrackLengthInWaterConfig_train_DNN
+DNNTrackLength PythonScript configfiles/FindTrackLengthInWater/1_Train_DNN/DNNTrackLength_train

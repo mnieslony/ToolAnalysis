@@ -5,29 +5,34 @@
 ##################################
 verbosity 9
 
+###########################################################################################################
+##                                       Step One: Training DNN                                          ##
+##   Since the DNN predicted output is required to train the BDTs, this must be run before the others    ##
+###########################################################################################################
+
 ####################################
 # DNNFindTrackLenghInWater Variables
 ####################################
 TrackLengthCheckpointDir ../LocalFolder/DNNFindTrackLenghInWater_Model            # DNN model, weights etc
 MaxTotalHitsToDNN 1100                                                            # Part of the DNN model definition
-TrackLengthTrainingDataFile ../LocalFolder/NEWdata_forRecoLength_9_10MRD.csv      #
-TrackLengthTestingDataFile ../LocalFolder/NEWdata_forRecoLength_0_8MRD.csv        # use 'NA' to skip generation of metrics
+TrackLengthTrainingDataFile ../LocalFolder/wcsim_29_03_19_ANNIEp2v6_muonsonly_nodigit_BNB_Water_10k_22-05-17_DNN_training_input.csv      #
+TrackLengthTestingDataFile ../LocalFolder/wcsim_29_03_19_ANNIEp2v6_muonsonly_nodigit_BNB_Water_10k_22-05-17_DNN_testing_input.csv        # use 'NA' to skip generation of metrics
 TrackLengthPredictionsFile NA                                                     # unused in training
 
 ####################################
 # BDTMuonEnergyReco Variables
 ####################################
-BDTMuonModelFile ../LocalFolder/BDTmodel_forMuonEnergy.sav                        # BDT model, weights etc
-MuonEnergyTrainingDataFile ../LocalFolder/vars_Ereco.csv
-MuonEnergyTestingDataFile  NA                                                     # Use 'NA' to skip generation of metrics
+BDTMuonModelFile NA                                                               # BDT model, weights etc
+MuonEnergyTrainingDataFile NA                                                     # Training input data
+MuonEnergyTestingDataFile NA                                                      # Use 'NA' to skip generation of metrics
 BDT_NuE_threshold 2.                                                              # Maximum True E used for training [GeV]
 MuonEnergyPredictionsFile NA                                                      # unused in training
 
 ####################################
 # BDTNeutrinoEnergyReco Variables
 ####################################
-BDTNeutrinoModelFile ../LocalFolder/BDTmodel_forNeutrinoEnergy.sav                # BDT model, weights etc
-NeutrinoEnergyTrainingDataFile ../LocalFolder/vars_Ereco.csv                      #
+BDTNeutrinoModelFile NA                                                           # BDT model, weights etc
+NeutrinoEnergyTrainingDataFile NA                                                 # Training input data
 NeutrinoEnergyTestingDataFile  NA                                                 # use 'NA' to skip generation of metrics
 BDT_NuE_threshold 2.                                                              # Maximum True E used for training [GeV]
 NeutrinoEnergyPredictionsFile NA                                                  # unused in training

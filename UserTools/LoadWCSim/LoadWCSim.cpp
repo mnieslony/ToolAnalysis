@@ -53,6 +53,11 @@ bool LoadWCSim::Initialise(std::string configfile, DataModel &data){
 		Log("LoadWCSim Tool: Assuming LAPPD stripline separation of 7.14mm",v_warning,verbosity);
 		LappdStripSeparation = 7.14;
 	}
+	uint32_t filestartoffset;
+	get_ok = m_variables.Get("FileStartOffset", filestartoffset);  // start processing TChain from entry X
+	if(not get_ok){
+		filestartoffset = 0;
+	}
 	// put version in the CStore for downstream tools
 	m_data->CStore.Set("WCSimVersion", WCSimVersion);
 	
@@ -157,7 +162,7 @@ bool LoadWCSim::Initialise(std::string configfile, DataModel &data){
 	*/
 	
 	EventNumber=0;
-	MCEventNum=-1;
+	MCEventNum=filestartoffset-1;
 	MCTriggernum=0;
 	// pull the first entry with a trigger and use it's Date for the BeamStatus last recorded time. TODO
 	if(verbosity>1) cout<<"getting Run start time"<<endl;
@@ -167,7 +172,7 @@ bool LoadWCSim::Initialise(std::string configfile, DataModel &data){
 	} while(WCSimEntry->wcsimrootevent->GetNumberOfEvents()==0);
 	atrigt = WCSimEntry->wcsimrootevent->GetTrigger(0);
 	TimeClass RunStartTime(atrigt->GetHeader()->GetDate());
-	MCEventNum=0;
+	MCEventNum=filestartoffset;
 	MCFile = WCSimEntry->GetCurrentFile()->GetName();
 	m_data->Stores.at("ANNIEEvent")->Set("MCFile",MCFile);
 	
