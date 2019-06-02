@@ -34,11 +34,13 @@ bool PythonScript::Initialise(std::string configfile, DataModel &data){
   PyThreadState_Swap(pythread);
 
   // Loading store API into python env
-  Py_InitModule("Store", StoreMethods);
+//  Py_InitModule("Store", StoreMethods);
+  PyModule_Create(&StoreModule);
   
   // Loading python script/module
   //  std::cout<<pythonscript.c_str()<<std::endl;
-  pName = PyString_FromString(pythonscript.c_str());
+  //pName = PyString_FromString(pythonscript.c_str());
+  pName = PyUnicode_FromString(pythonscript.c_str());
 
   // Error checking of pName to be added later
   pModule = PyImport_Import(pName);
@@ -77,7 +79,8 @@ bool PythonScript::Initialise(std::string configfile, DataModel &data){
       
       
       if(pValue != NULL){
-	if (!(PyInt_AsLong(pValue))){ 
+	//if (!(PyInt_AsLong(pValue))){ 
+	if(!(PyLong_AsLong(pValue))){
 	  std::cout<<"Python script returned internal error in initialise "<<std::endl;	
 	  return false;
 	}
@@ -129,7 +132,8 @@ bool PythonScript::Execute(){
       Py_DECREF(pArgs); // delete arguments
       
       if(pValue != NULL){
-	if (!(PyInt_AsLong(pValue))){
+	//if (!(PyInt_AsLong(pValue))){
+	if (!(PyLong_AsLong(pValue))){
 	  std::cout<<"Python script returned internal error in execute "<<std::endl;
 	  return false;
 	}
@@ -172,7 +176,8 @@ bool PythonScript::Finalise(){
       Py_DECREF(pArgs);
       
       if (pValue != NULL) {
-	if (!(PyInt_AsLong(pValue))){
+	//if (!(PyInt_AsLong(pValue))){
+	if (!(PyLong_AsLong(pValue))){
 	  std::cout<<"Python script returned internal error in finalise "<<std::endl;
           return false;
         }
@@ -203,3 +208,4 @@ bool PythonScript::Finalise(){
   
   return true;
 }
+

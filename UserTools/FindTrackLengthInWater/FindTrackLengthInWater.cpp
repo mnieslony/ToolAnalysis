@@ -1,4 +1,6 @@
 #include "FindTrackLengthInWater.h"
+#include <boost/filesystem.hpp>
+#include "TMath.h"
 
 FindTrackLengthInWater::FindTrackLengthInWater():Tool(){}
 
@@ -11,26 +13,58 @@ bool FindTrackLengthInWater::Initialise(std::string configfile, DataModel &data)
 
   m_data= &data; //assigning transient data pointer
   /////////////////////////////////////////////////////////////////
-  // get configuration variables for this tool 
+  // get configuration variables for this tool
   m_variables.Get("verbosity",verbosity);
+
+  // make the BoostStore to replace the csv file
+  BoostStore* energystore = new BoostStore(true,0); // type is single-event binary file
+  m_data->Stores.emplace("EnergyReco",energystore);
 
   // Retrieve variables from m_data to pass to the python scripts
   // FIXME supposedly there is a way to pass variables from the python script config
   // files to the python scripts directly, rather than using another Tool to put
-  // them into a BoostStore... 
+  // them into a BoostStore...
   // ==========================
   // Variables to be passed to DNNFindTrackLenghInWater
   // --------------------------------------------------
+std::cout<<"getting DNN variables"<<std::endl;
   std::string TrackLengthTrainingDataFile;
   std::string TrackLengthTestingDataFile;
   std::string TrackLengthCheckpointDir;
   std::string TrackLengthPredictionsFile;
   // retrieve from m_data
-  m_variables.Get("TrackLengthTrainingDataFile",TrackLengthTrainingDataFile);
-  m_variables.Get("TrackLengthTestingDataFile",TrackLengthTestingDataFile);
-  m_variables.Get("TrackLengthCheckpointDir",TrackLengthCheckpointDir);
-  m_variables.Get("TrackLengthPredictionsFile",TrackLengthPredictionsFile);
-  m_variables.Get("MaxTotalHitsToDNN",maxhits0);
+  get_ok = m_variables.Get("TrackLengthTrainingDataFile",TrackLengthTrainingDataFile);
+  if(not get_ok){
+    Log("FindTrackLengthInWater Tool: No TrackLengthTrainingDataFile specified, will not be written",v_warning,verbosity);
+    TrackLengthTrainingDataFile="NA";
+  }
+  get_ok = m_variables.Get("TrackLengthTestingDataFile",TrackLengthTestingDataFile);
+  if(not get_ok){
+    Log("FindTrackLengthInWater Tool: No TrackLengthTestingDataFile specified, will not be written",v_warning,verbosity);
+    TrackLengthTestingDataFile="NA";
+  }
+  get_ok = m_variables.Get("TrackLengthCheckpointDir",TrackLengthCheckpointDir);
+  if(not get_ok){
+    Log("FindTrackLengthInWater Tool: No TrackLengthCheckpointDir specified! This must specify the location of the DNN model! Aborting...",v_error,verbosity);
+    return false;
+  }
+  get_ok = m_variables.Get("TrackLengthPredictionsFile",TrackLengthPredictionsFile);
+  if(not get_ok){
+    Log("FindTrackLengthInWater Tool: No TrackLengthPredictionsFile specified, will not be written",v_warning,verbosity);
+    TrackLengthPredictionsFile="NA";
+  }
+  get_ok = m_variables.Get("MaxTotalHitsToDNN",maxhits0);
+  if(not get_ok){
+    Log("FindTrackLengthInWater Tool: No MaxTotalHitsToDNN specified: assuming 1100, but this MUST match the value used for DNN training!",v_warning,verbosity);
+    maxhits0=1100;
+  }
+  get_ok = m_variables.Get("DNNTrainingEntries",trainingentries);
+  if(not get_ok){
+    auto errorlevel = (TrackLengthTestingDataFile!="NA") ? v_warning : v_message;
+    Log("FindTrackLengthInWater Tool: No DNNTrainingEntries specified: will not split entries into test+training files",errorlevel,verbosity);
+    trainingentries=-1;
+  }
+std::cout<<"passing to EnergyReco store"<<std::endl;
   // Pass to EnergyReco booststore
   m_data->Stores.at("EnergyReco")->Set("TrackLengthTrainingDataFile",TrackLengthTrainingDataFile);
   m_data->Stores.at("EnergyReco")->Set("TrackLengthTestingDataFile",TrackLengthTestingDataFile);
@@ -39,35 +73,109 @@ bool FindTrackLengthInWater::Initialise(std::string configfile, DataModel &data)
   
   // variables to be passed to BDTMuonEnergyReco
   // -------------------------------------------
+std::cout<<"getting BDTMuon variables"<<std::endl;
   std::string MuonEnergyTrainingDataFile;
   double BDT_NuE_threshold;
   std::string BDTMuonModelFile;
   std::string MuonEnergyTestingDataFile;
   std::string MuonEnergyPredictionsFile;
   // retrieve from m_data
-  m_variables.Get("MuonEnergyTrainingDataFile",MuonEnergyTrainingDataFile);  // input file
-  m_variables.Get("MuonEnergyTestingDataFile",MuonEnergyTestingDataFile);    // input file
-  m_variables.Get("MuonEnergyPredictionsFile",MuonEnergyPredictionsFile);    // output file
-  m_variables.Get("BDTMuonModelFile",BDTMuonModelFile);
-  m_variables.Get("BDT_NuE_threshold",BDT_NuE_threshold);
+  get_ok = m_variables.Get("MuonEnergyTrainingDataFile",MuonEnergyTrainingDataFile);  // input file
+  if(not get_ok){
+    Log("FindTrackLengthInWater Tool: No MuonEnergyTrainingDataFile specified, will not be generated",v_warning,verbosity);
+    MuonEnergyTrainingDataFile="NA";
+  }
+  get_ok = m_variables.Get("MuonEnergyTestingDataFile",MuonEnergyTestingDataFile);    // input file
+  if(not get_ok){
+    Log("FindTrackLengthInWater Tool: No MuonEnergyTestingDataFile specified, will not be generated",v_warning,verbosity);
+    MuonEnergyTestingDataFile="NA";
+  }
+  get_ok = m_variables.Get("MuonEnergyPredictionsFile",MuonEnergyPredictionsFile);    // output file
+  if(not get_ok){
+    Log("FindTrackLengthInWater Tool: No MuonEnergyPredictionsFile specified, will not be generated",v_warning,verbosity);
+    MuonEnergyPredictionsFile="NA";
+  }
+  get_ok = m_variables.Get("BDTMuonModelFile",BDTMuonModelFile);
+  if(not get_ok){
+    Log("FindTrackLengthInWater Tool: No BDTMuonModelFile specified! Cannot train or predict Muon Energy!",v_warning,verbosity);
+    BDTMuonModelFile="NA";
+  }
+  get_ok = m_variables.Get("BDT_NuE_threshold",BDT_NuE_threshold);
+  if(not get_ok){
+    Log("FindTrackLengthInWater Tool: No upper threshold on Neutrino energy for BDT training specified, assuming 2GeV",v_warning,verbosity);
+    BDT_NuE_threshold=2.;
+  }
   // Pass to EnergyReco booststore
+std::cout<<"passing to store"<<std::endl;
   m_data->Stores.at("EnergyReco")->Set("MuonEnergyTrainingDataFile",MuonEnergyTrainingDataFile);
   m_data->Stores.at("EnergyReco")->Set("MuonEnergyTestingDataFile",MuonEnergyTestingDataFile);
   m_data->Stores.at("EnergyReco")->Set("MuonEnergyPredictionsFile",MuonEnergyPredictionsFile);
   m_data->Stores.at("EnergyReco")->Set("BDTMuonModelFile",BDTMuonModelFile);
   m_data->Stores.at("EnergyReco")->Set("BDT_NuE_threshold",BDT_NuE_threshold);
+
+  // variables to be passed to BDTNeutrinoEnergyReco
+  // -----------------------------------------------
+std::cout<<"getting BDTNeutrino variables"<<std::endl;
+  std::string NeutrinoEnergyTrainingDataFile;
+  std::string BDTNeutrinoModelFile;
+  std::string NeutrinoEnergyTestingDataFile;
+  std::string NeutrinoEnergyPredictionsFile;
+  // retrieve from m_data
+  get_ok = m_variables.Get("NeutrinoEnergyTrainingDataFile",NeutrinoEnergyTrainingDataFile);  // input file
+  if(not get_ok){
+    Log("FindTrackLengthInWater Tool: No NeutrinoEnergyTrainingDataFile specified, will not be generated",v_warning,verbosity);
+    NeutrinoEnergyTrainingDataFile="NA";
+  }
+  get_ok = m_variables.Get("NeutrinoEnergyTestingDataFile",NeutrinoEnergyTestingDataFile);    // input file
+  if(not get_ok){
+    Log("FindTrackLengthInWater Tool: No NeutrinoEnergyTestingDataFile specified, will not be generated",v_warning,verbosity);
+    NeutrinoEnergyTestingDataFile="NA";
+  }
+  get_ok = m_variables.Get("NeutrinoEnergyPredictionsFile",NeutrinoEnergyPredictionsFile);    // output file
+  if(not get_ok){
+    Log("FindTrackLengthInWater Tool: No NeutrinoEnergyPredictionsFile specified, will not be generated",v_warning,verbosity);
+    NeutrinoEnergyPredictionsFile="NA";
+  }
+  get_ok = m_variables.Get("BDTNeutrinoModelFile",BDTNeutrinoModelFile);
+  if(not get_ok){
+    Log("FindTrackLengthInWater Tool: No BDTNeutrinoModelFile specified! Cannot train or predict Neutrino Energy!",v_warning,verbosity);
+    BDTNeutrinoModelFile="NA";
+  }
+  // Pass to EnergyReco booststore
+std::cout<<"passing to store"<<std::endl;
+  m_data->Stores.at("EnergyReco")->Set("NeutrinoEnergyTrainingDataFile",NeutrinoEnergyTrainingDataFile);
+  m_data->Stores.at("EnergyReco")->Set("NeutrinoEnergyTestingDataFile",NeutrinoEnergyTestingDataFile);
+  m_data->Stores.at("EnergyReco")->Set("NeutrinoEnergyPredictionsFile",NeutrinoEnergyPredictionsFile);
+  m_data->Stores.at("EnergyReco")->Set("BDTNeutrinoModelFile",BDTNeutrinoModelFile);
   
   // ==================================
   
-      std::cout<<" open file.. max number of hits: "<<maxhits0<<std::endl;  
+      std::cout<<"max number of hits: "<<maxhits0<<std::endl;  
       if(maxhits0>1100){ 
         std::cerr<<" Please change the dim of double lambda_vec[1100]={0.}; double digitt[1100]={0.}; from 1100 to max number of hits"<<std::endl; 
       }
       if(TrackLengthTrainingDataFile!="NA"){
-        // if we're not doing training, don't convert the whole run to a csv file
-        csvfile.open(TrackLengthTrainingDataFile);
-        //if(first==1 && deny_access==0){
-          //    deny_access=1;
+        // if we're not doing training, don't write the csv files
+        if(trainingentries>1){
+std::cout<<"writing DNN training and testing files"<<std::endl;
+          // if we're splitting the run up into training and testing samples, we need to generate multiple output csvs
+//          boost::filesystem::path P(TrackLengthTrainingDataFile.c_str());
+//          boost::filesystem::path newPath1 = P.parent_path() / boost::filesystem::path(P.stem().string() + "_1.csv");
+//          boost::filesystem::path newPath2 = P.parent_path() / boost::filesystem::path(P.stem().string() + "_2.csv");
+          tracklengthtrainingfiles.push_back(TrackLengthTrainingDataFile);
+          tracklengthtrainingfiles.push_back(TrackLengthTestingDataFile);
+        } else {
+          // otherwise just one csv
+          tracklengthtrainingfiles.push_back(TrackLengthTrainingDataFile);
+std::cout<<"writing DNN training file: "<<TrackLengthTrainingDataFile<<std::endl;
+        }
+        // loop over the csv's we're creating and write header row
+        for(std::string apath : tracklengthtrainingfiles){
+std::cout<<"writing header for file "<<apath<<std::endl;
+          csvfile.open(apath,std::fstream::out);
+          if(!csvfile.is_open()){
+           Log("FindTrackLengthInWater Tool: Failed to open "+apath+" for writing headers",v_error,verbosity);
+          }
           for (int i=0; i<maxhits0;++i){
              csvfile<<"l_"<<i<<",";
           }
@@ -93,11 +201,11 @@ bool FindTrackLengthInWater::Initialise(std::string configfile, DataModel &data)
           csvfile<<"vtxZ";
           csvfile<<'\n';
           // }
+          csvfile.close();
         }
-  
-  // make the BoostStore to replace the csv file
-  BoostStore* energystore = new BoostStore(true,0); // type is single-event binary file
-  m_data->Stores.emplace("EnergyReco",energystore);
+        csvfile.open(tracklengthtrainingfiles.front(),std::fstream::app);  // open (first) file for writing events
+      }
+std::cout<<"getting anniegeom"<<std::endl;
   
   get_ok = m_data->Stores.at("ANNIEEvent")->Header->Get("AnnieGeometry",anniegeom);
   if(not get_ok){
@@ -107,6 +215,7 @@ bool FindTrackLengthInWater::Initialise(std::string configfile, DataModel &data)
   tank_radius = anniegeom->GetTankRadius()*100.;
   tank_halfheight = anniegeom->GetTankHalfheight()*100.;
   
+std::cout<<"done initializing"<<std::endl;
   return true;
 }
 
@@ -287,7 +396,12 @@ bool FindTrackLengthInWater::Execute(){
        
        // Write to .csv file - including variables for track length & energy reconstruction
        // ==================
-       if(csvfile.is_open()){
+       // pick which file to write to
+       if(tracklengthtrainingfiles.size()){  // if any
+         if((tracklengthtrainingfiles.size()>1) && (EventNumber=trainingentries)){    // once we've processed requested
+           csvfile.close();                                                           // number of training entries
+           csvfile.open(tracklengthtrainingfiles.back(), std::fstream::app);          // switch output to testing file
+         }
          for(int i=0; i<maxhits0;++i){
             csvfile<<lambda_vector.at(i)<<",";
          }
@@ -312,7 +426,7 @@ bool FindTrackLengthInWater::Execute(){
          csvfile<<vtxY<<",";
          csvfile<<vtxZ;
          csvfile<<'\n';
-        }
+       }
         
         // Put these variables in the ANNIEEvent
         // =====================================

@@ -53,7 +53,7 @@ bool LoadWCSim::Initialise(std::string configfile, DataModel &data){
 		Log("LoadWCSim Tool: Assuming LAPPD stripline separation of 7.14mm",v_warning,verbosity);
 		LappdStripSeparation = 7.14;
 	}
-	uint32_t filestartoffset;
+	long long filestartoffset;
 	get_ok = m_variables.Get("FileStartOffset", filestartoffset);  // start processing TChain from entry X
 	if(not get_ok){
 		filestartoffset = 0;
@@ -172,7 +172,7 @@ bool LoadWCSim::Initialise(std::string configfile, DataModel &data){
 	} while(WCSimEntry->wcsimrootevent->GetNumberOfEvents()==0);
 	atrigt = WCSimEntry->wcsimrootevent->GetTrigger(0);
 	TimeClass RunStartTime(atrigt->GetHeader()->GetDate());
-	MCEventNum=filestartoffset;
+	MCEventNum=filestartoffset-1;
 	MCFile = WCSimEntry->GetCurrentFile()->GetName();
 	m_data->Stores.at("ANNIEEvent")->Set("MCFile",MCFile);
 	

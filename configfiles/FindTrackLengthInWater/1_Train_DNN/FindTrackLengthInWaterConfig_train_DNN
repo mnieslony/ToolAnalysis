@@ -13,6 +13,7 @@ verbosity 9
 ####################################
 # DNNFindTrackLenghInWater Variables
 ####################################
+DNNTrainingEntries 200000                                                           # Entries > this will go into testing file
 TrackLengthCheckpointDir ../LocalFolder/DNNFindTrackLenghInWater_Model            # DNN model, weights etc
 MaxTotalHitsToDNN 1100                                                            # Part of the DNN model definition
 TrackLengthTrainingDataFile ../LocalFolder/wcsim_29_03_19_ANNIEp2v6_muonsonly_nodigit_BNB_Water_10k_22-05-17_DNN_training_input.csv      #

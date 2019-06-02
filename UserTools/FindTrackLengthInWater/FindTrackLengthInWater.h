@@ -30,6 +30,8 @@ class FindTrackLengthInWater: public Tool {
   int count1=0;
   
   std::ofstream csvfile;
+  std::vector<std::string> tracklengthtrainingfiles;
+  long long trainingentries;
   
   Geometry* anniegeom=nullptr;
   double tank_radius;

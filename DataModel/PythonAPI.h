@@ -5,6 +5,9 @@
 #include <boost/core/demangle.hpp>
 #include <typeinfo>
 #include <regex>
+#include <map>
+#include "DataModel.h"
+#include "BoostStore.h"
 
 std::map<std::string,std::string> typename_to_python_type{{"int","i"},{"long long","l"},{"double","d"},{"char","c"},{"std::string","s"},{"bool","i"}};
 
@@ -501,7 +504,7 @@ static PyObject* SetStoreVariable(PyObject* self, PyObject* args){
   //bool iscontainer = PyObject_IsInstance(variableasobj, (tuple, list, set, numpy.ndarray));
   // probably the most generically suitable check may be to see if we can iterate over the object.
   // But note: strings in python are also iterable, so check for that explicitly.
-  int isiterable = ((PyIter_Check(variableasobj)) && (!(PyString_Check(variableasobj))));
+  int isiterable = ((PyIter_Check(variableasobj)) && (!PyObject_TypeCheck(&variableasobj, &PyUnicode_Type)));
   
   // if it is, scan through the elements and get their type(s)
   std::string pythontypestring="first";
@@ -627,5 +630,12 @@ static PyMethodDef StoreMethods[] = {
   {NULL, NULL, 0, NULL}
 };
 
+static struct PyModuleDef StoreModule = {
+  PyModuleDef_HEAD_INIT,
+  "Store",
+  "Module for accessing BoostStores from python tools",
+  -1,
+  StoreMethods
+};
 
 #endif
