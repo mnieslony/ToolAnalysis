@@ -16,6 +16,11 @@ from sklearn import datasets
 from sklearn import metrics
 from sklearn import model_selection
 from sklearn import preprocessing
+from tensorflow import keras
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense
+from tensorflow.keras.callbacks import ModelCheckpoint
+from tensorflow.keras.wrappers.scikit_learn import KerasRegressor
 
 def Initialise():
     return 1
@@ -23,7 +28,17 @@ def Initialise():
 def Finalise():
     return 1
 
-def Execute(Toolchain=True, trainingdatafilename=None, checkpointdir=None, testingdatafilename=None):
+def create_model():
+    # create model
+    model = Sequential()
+    model.add(Dense(50, input_dim=2203, kernel_initializer='he_normal', activation='relu'))
+    model.add(Dense(5, kernel_initializer='he_normal', activation='relu'))
+    model.add(Dense(1, kernel_initializer='he_normal', activation='relu'))
+    # Compile model
+    model.compile(loss='mean_squared_error', optimizer='Adamax', metrics=['accuracy'])
+    return model
+
+def Execute(Toolchain=True, trainingdatafilename=None, weightsfilename=None, testingdatafilename=None):
     # train the model
     # Set TF random seed to improve reproducibility
     seed = 150
@@ -65,38 +80,28 @@ def Execute(Toolchain=True, trainingdatafilename=None, checkpointdir=None, testi
     scaler = preprocessing.StandardScaler()
     train_x = scaler.fit_transform(train_x)
     
-    # The easiest way to save a model during training and restore it later for prediction
-    # is via checkpoints. Simply pass a desired output directory for the checkpoint files
-    # and train calls will write checkpoints, while subsequent predict calls will retrieve them.
-    # In fact subsequent train calls will also attempt to use checkpoints to pre-load a starting
-    # point, so that training can be split into steps.
-    # XXX     We assume each training should be an independent one-shot process     XXX
-    # XXX          and wipe the checkpoint directory before training.               XXX
-    # The limitation of this method is that the Estimator defined before 'predict' calls
-    # must match that defined before 'train' calls, for the checkpoint to load correctly
-    # XXX i.e. if you change the DNNRegressor Estimator here (e.g. # hidden layers) XXX
-    # XXX  you must change it in DNNFindTrackLenghInWater_pred.py to match as well  XXX
-    # you could of course have multiple checkpoint directories for multiple trained models
-    # Retrieve the user's desired output location to store the model checkpoint
-    if Toolchain:
-        checkpointdir = Store.GetStoreVariable('EnergyReco','TrackLengthCheckpointDir')
-    print('Clearing any existing checkpoints in...'+checkpointdir)
-    shutil.rmtree(checkpointdir, True)  # try to remove checkpoint dir, ignore errors
- 
-    # Build a fully connected DNN with 2 hidden layers, with 70 and 20 nodes respectively.
-    feature_columns = [
-       tf.feature_column.numeric_column('x', shape=np.array(train_x).shape[1:])]
-    regressor = tf.estimator.DNNRegressor(
-       feature_columns=feature_columns, hidden_units=[70, 20],model_dir=checkpointdir)
+    # Construct the DNN model
+    estimator = KerasRegressor(build_fn=create_model, epochs=10, batch_size=2, verbose=0)
 
-    # Train.
+    # load weights
+    if Toolchain:
+        weightsfilename = Store.GetStoreVariable('EnergyReco','TrackLengthWeightsFile')
+    checkpoint = ModelCheckpoint(weightsfilename, monitor='val_loss', verbose=1, save_best_only=True, save_weights_only=True, mode='auto')
+    callbacks_list = [checkpoint]
+    # Run the model
     print('training....')
-    batch_size = 1#2
-    epochs_no= 2000
-    n_batches = int(np.ceil(num_events / batch_size))
-    train_input_fn = tf.estimator.inputs.numpy_input_fn(
-          x={'x': train_x}, y=train_y, batch_size=batch_size, num_epochs=epochs_no, shuffle=False,num_threads=1)
-    regressor.train(input_fn=train_input_fn,steps=1000) #1000)
+    history = estimator.fit(train_x, train_y, validation_split=0.33, epochs=10, batch_size=2, callbacks=callbacks_list, verbose=0)
+
+    # summarize history for loss
+    f, ax2 = plt.subplots(1,1)
+    ax2.plot(history.history['loss'])
+    ax2.plot(history.history['val_loss'])
+    ax2.set_title('model loss')
+    ax2.set_ylabel('Performance')
+    ax2.set_xlabel('Epochs')
+    #ax2.set_xlim(0.,10.)
+    ax2.legend(['train', 'test'], loc='upper left')
+    plt.savefig("keras_train_test.pdf")
 
     # Score accuracy
     #-----------------------------
@@ -116,21 +121,19 @@ def Execute(Toolchain=True, trainingdatafilename=None, checkpointdir=None, testi
         testfeatures, testlambdamax, testlabels, testrest = np.split(TestingDataset,[2203,2204,2205],axis=1)
         # scale the features
         testfeatures_transformed = scaler.transform(testfeatures)
-        # construct the test data structure
-        test_input_fn = tf.estimator.inputs.numpy_input_fn(
-             x={'x': testfeatures_transformed}, y=testlabels, shuffle=False)
         
-        # Score with tensorflow.
-        scores = regressor.evaluate(input_fn=test_input_fn)
-        print('MSE (tensorflow): {0:f}'.format(scores['average_loss']))
+        # estimate accuracy on whole dataset using loaded weights
+        scores = estimator.evaluate(testfeatures_transformed, testlabels, verbose=0)
+        print("%s: %.2f%%" % (estimator.metrics_names[1], scores[1]*100))
+
         if Toolchain:
-            Store.SetStoreVariable('EnergyReco','DNNTrackLengthTrainScore',scores['average_loss'])
+            Store.SetStoreVariable('EnergyReco','DNNTrackLengthTrainScore',scores[1]*100)
 
     return 1
 
 if __name__ == "__main__":
     # Make the script runnable as a standalone python script too?
-    trainingdatafilename = '../LocalFolder/NEWdata_forRecoLength_9_10MRD.csv'
-    testingdatafilename = '../LocalFolder/NEWdata_forRecoLength_0_8MRD.csv'
-    checkpointdir = '../LocalFolder/DNNFindTrackLenghInWater_Model'
-    Execute(False, trainingdatafilename, checkpointdir, testingdatafilename)
+    trainingdatafilename = '../LocalFolder/data_forRecoLength_05202019.csv'
+    testingdatafilename = '../LocalFolder/data_forRecoLength_05202019.csv'
+    weightsfilename = 'weights_bets.hdf5'
+    Execute(False, trainingdatafilename, weightsfilename, testingdatafilename)

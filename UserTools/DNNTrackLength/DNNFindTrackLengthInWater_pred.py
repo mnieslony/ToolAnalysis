@@ -16,6 +16,10 @@ from sklearn import datasets
 from sklearn import metrics
 from sklearn import model_selection
 from sklearn import preprocessing
+from tensorflow import keras
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense
+from tensorflow.keras.callbacks import ModelCheckpoint
 
 def Initialise():
     return 1
@@ -74,25 +78,25 @@ def Execute():
     scaler = preprocessing.StandardScaler()
     x_transformed = scaler.transform(test_x)
     
-    # define BDT model, loading weight from checkpointdir
-    # XXX the Estimator definition here must match the Estimator definition in   XXX
-    # XXX the train script used to generate the checkpoints storing the weights! XXX
-    checkpointdir = Store.GetStoreVariable('EnergyReco','TrackLengthCheckpointDir')
-    print('Loading model weights from '+checkpointdir)
-    feature_columns = [
-       tf.feature_column.numeric_column('x', shape=np.array(test_x).shape[1:])]
-    regressor = tf.estimator.DNNRegressor(
-       feature_columns=feature_columns, hidden_units=[70, 20],model_dir=checkpointdir)
+    # define keras model, loading weight from weights file
+    model = Sequential()
+    model.add(Dense(50, input_dim=2203, kernel_initializer='he_normal', activation='relu'))
+    model.add(Dense(5, kernel_initializer='he_normal', activation='relu'))
+    model.add(Dense(1, kernel_initializer='he_normal', activation='relu'))
+
+    # load weights
+    if Toolchain:
+        weightsfilename = Store.GetStoreVariable('EnergyReco','TrackLengthWeightsFile')
+    model.load_weights(weightsfilename)
+
+    # Compile model
+    model.compile(loss='mean_squared_error', optimizer='Adamax', metrics=['accuracy'])
+    print("Created model and loaded weights from file"+weightsfilename)
     
     # Do prediction
     #-----------------------------
     print('predicting...')
-    test_input_fn = tf.estimator.inputs.numpy_input_fn(
-         x={'x': x_transformed}, y=test_y, shuffle=False)
-    predictions = regressor.predict(input_fn=test_input_fn)
-    y_predicted = np.array(list(p['predictions'] for p in predictions))
-    y_predicted = y_predicted.reshape(np.array(test_y).shape)
-    
+    y_predicted = model.predict(x_transformed)
     
     # Score accuracy (if the truth label is meaningful)
     #-----------------------------

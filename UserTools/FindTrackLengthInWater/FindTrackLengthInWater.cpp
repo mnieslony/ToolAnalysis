@@ -199,6 +199,10 @@ std::cout<<"writing header for file "<<apath<<std::endl;
           csvfile<<"vtxX"<<",";        // of the reconstructed event
           csvfile<<"vtxY"<<",";
           csvfile<<"vtxZ";
+          csvfile<<"recoVtxFOM"<<",";
+          csvfile<<"recoStatus"<<",";
+          csvfile<<"deltaVtxR"<<",";
+          csvfile<<"deltaAngle"<<",";
           csvfile<<'\n';
           // }
           csvfile.close();
@@ -224,7 +228,7 @@ bool FindTrackLengthInWater::Execute(){
    // read the input hit and reconstruction info
    // ==========================================
    Int_t recoStatus;
-   double vtxX,vtxY,vtxZ,dirX,dirY,dirZ,TrueTrackLengthInMrd,TrueTrackLengthInWater,TrueNeutrinoEnergy,trueEnergy;
+   double vtxX,vtxY,vtxZ,dirX,dirY,dirZ,TrueTrackLengthInMrd,TrueTrackLengthInWater,TrueNeutrinoEnergy,trueEnergy, recoVtxFOM, deltaVtxR, deltaAngle;
    std::string TrueInteractionType;
    std::vector<double> digitX; std::vector<double> digitY;  std::vector<double> digitZ;
    std::vector<double> digitT;
@@ -252,6 +256,7 @@ bool FindTrackLengthInWater::Execute(){
    }
    // get the reconstructed vertex and direction
    recoStatus = theExtendedVertex.GetStatus();
+   recoVtxFOM = theExtendedVertex.GetFOM();
    vtxX = theExtendedVertex.GetPosition().X();
    vtxY = theExtendedVertex.GetPosition().Y();
    vtxZ = theExtendedVertex.GetPosition().Z();
@@ -296,6 +301,13 @@ bool FindTrackLengthInWater::Execute(){
    TrueTrackLengthInWater = primarymuon->GetTrackLengthInTank();
    TrueTrackLengthInMrd = primarymuon->GetTrackLengthInMrd();
    trueEnergy = primarymuon->GetStartEnergy();
+   deltaVtxR = 100.*(theExtendedVertex.GetPosition()-primarymuon->GetStartVertex()).Mag();
+  double cosphi = primarymuon->GetStartDirection().X()*theExtendedVertex.GetDirection().X()+
+                primarymuon->GetStartDirection().Y()*theExtendedVertex.GetDirection().Y()+
+                primarymuon->GetStartDirection().Z()*theExtendedVertex.GetDirection().Z();
+  double phi = TMath::ACos(cosphi); // radians
+  deltaAngle = phi*TMath::RadToDeg();
+   //deltaAngle = (theExtendedVertex.GetDirection()-primarymuon->GetStartDirection()).Mag();
    
    // Get the PMT hit information
    // ===========================
@@ -346,10 +358,12 @@ bool FindTrackLengthInWater::Execute(){
    uint32_t EventNumber;
    get_ok = m_data->Stores.at("ANNIEEvent")->Get("EventNumber", EventNumber);
    std::cout<<"EventNumber: "<<EventNumber<<endl;
-   if(recoStatus == 0){ count1++;
+   //if(recoStatus == 0){ count1++;
+   if(recoVtxFOM>0){ count1++;
      // XXX FIXME XXX only if Monte Carlo!
      // XXX What about for measuring error on reconstructed energy for other event toplogies? XXX
-     if((TrueInteractionType == "QES - Weak[CC]") && TrueTrackLengthInMrd>0.){
+     //if((TrueInteractionType == "QES - Weak[CC]") && TrueTrackLengthInMrd>0.){ // XXX no genie, but for data?
+      if(TrueTrackLengthInMrd>0.){
    	//std::cout<<"current entry: "<<EventNumber<<" with nhits: "<<digitT.size()<<std::endl;
 
         //calculate diff dir with (0,0,1)  
@@ -388,8 +402,8 @@ bool FindTrackLengthInWater::Execute(){
 //       float lambda_max_2     = TMath::Abs(lambda_max)/500;
 //       float totalPMTs2=double(totalPMTs)/1000.;
 //       float totalLAPPDs2=double(totalLAPPDs)/1000.;
-//       float TrueTrackLengthInWater2 = TrueTrackLengthInWater/500.;
-       float TrueTrackLengthInMrd2 = TrueTrackLengthInMrd/200.;
+       float TrueTrackLengthInWater2 = TrueTrackLengthInWater*100.;  // convert to [cm]
+       float TrueTrackLengthInMrd2 = TrueTrackLengthInMrd*100.;      // convert to [cm]
        // we need to normalise the hit time and lambda vectors to fixed dimensions to match the DNN
        lambda_vector.resize(maxhits0);
        digitT.resize(maxhits0);
@@ -412,7 +426,7 @@ bool FindTrackLengthInWater::Execute(){
          csvfile<<totalPMTs<<",";
          csvfile<<totalLAPPDs<<",";
          csvfile<<lambda_max<<",";
-         csvfile<<TrueTrackLengthInWater<<",";
+         csvfile<<TrueTrackLengthInWater2<<",";
          csvfile<<TrueNeutrinoEnergy<<",";
          csvfile<<trueEnergy<<",";
          csvfile<<diffDirAbs2<<",";
@@ -424,7 +438,11 @@ bool FindTrackLengthInWater::Execute(){
          csvfile<<dirZ<<",";
          csvfile<<vtxX<<",";
          csvfile<<vtxY<<",";
-         csvfile<<vtxZ;
+         csvfile<<vtxZ<<",";
+         csvfile<<recoVtxFOM<<",";
+         csvfile<<recoStatus<<",";
+         csvfile<<deltaVtxR<<",";
+         csvfile<<deltaAngle;
          csvfile<<'\n';
        }
         
@@ -444,9 +462,12 @@ bool FindTrackLengthInWater::Execute(){
         // FIXME naming, if training are these actually trueDWallR2?
         m_data->Stores.at("EnergyReco")->Set("recoDWallR2",recoDWallR2);
         m_data->Stores.at("EnergyReco")->Set("recoDWallZ2",recoDWallZ2);
-        // FIXME we should pass RecoVtx and RecoDir ... unless training?
-        m_data->Stores.at("EnergyReco")->Set("dirVec",primarymuon->GetStartDirection());
-        m_data->Stores.at("EnergyReco")->Set("vtxVec",primarymuon->GetStartVertex());
+        m_data->Stores.at("EnergyReco")->Set("dirVec",theExtendedVertex.GetDirection());
+        m_data->Stores.at("EnergyReco")->Set("vtxVec",theExtendedVertex.GetPosition());
+        m_data->Stores.at("EnergyReco")->Set("recoVtxFOM",recoVtxFOM);
+        m_data->Stores.at("EnergyReco")->Set("recoStatus",recoStatus);
+        m_data->Stores.at("EnergyReco")->Set("deltaVtxR",deltaVtxR);
+        m_data->Stores.at("EnergyReco")->Set("deltaAngle",deltaAngle);
         
      }
    }

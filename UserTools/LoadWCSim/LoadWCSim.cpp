@@ -261,6 +261,7 @@ bool LoadWCSim::Execute(){
 			ParticleId_to_TankCharge->clear();
 			ParticleId_to_MrdCharge->clear();
 			ParticleId_to_VetoCharge->clear();
+			primarymuonindex=-1;
 			
 			for(int trigi=0; trigi<WCSimEntry->wcsimrootevent->GetNumberOfEvents(); trigi++){
 				
@@ -312,6 +313,11 @@ bool LoadWCSim::Execute(){
 						nextrack->GetId(),
 						nextrack->GetParenttype(),
 						nextrack->GetFlag());
+					if((nextrack->GetIpnu()==13)&&(nextrack->GetParenttype()==0)&&(nextrack->GetFlag()!=0)
+					     && (primarymuonindex<0)){
+						// call this the primary muon. If we have more than one, use the first
+						primarymuonindex = MCParticles->size();
+					}
 					if((abs(nextrack->GetIpnu())==13)||
 					   (abs(nextrack->GetIpnu())==211)||
 					   (nextrack->GetIpnu()==111)){

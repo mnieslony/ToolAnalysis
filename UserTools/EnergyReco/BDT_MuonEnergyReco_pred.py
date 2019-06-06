@@ -10,6 +10,7 @@ import csv
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import seaborn as sns
 from array import array
 from sklearn import datasets
 from sklearn import metrics
@@ -25,6 +26,22 @@ def Initialise():
     return 1
 
 def Finalise():
+    # make a plot of all the errors
+    # first retrieve all errors from Store
+    Yvec = Store.GetStoreVariable('EnergyReco','MuonEnergyAccuracyVec')
+    # now make the plot
+    nbins=np.arange(-100,100,2)
+    fig,ax0=plt.subplots(ncols=1, sharey=True)#, figsize=(8, 6))
+    cmap = sns.light_palette('b',as_cmap=True)
+    f=ax0.hist(np.array(Y), nbins, histtype='step', fill=True, color='gold',alpha=0.75)
+    ax0.set_xlim(-100.,100.)
+    ax0.set_xlabel('$\Delta E/E$ [%]')
+    ax0.set_ylabel('Number of Entries')
+    ax0.xaxis.set_label_coords(0.95, -0.08)
+    ax0.yaxis.set_label_coords(-0.1, 0.71)
+    title = "mean = %.2f, std = %.2f " % (np.array(Y).mean(), np.array(Y).std())
+    plt.title(title)
+    plt.savefig("DE_E.png")
     return 1
 
 def Execute():
@@ -58,13 +75,13 @@ def Execute():
     # Normalize them
     # --------------
     DNNRecoLength =/ 600.
-    num_lappd_hits =/ 1000
-    num_pmt_hits =/ 1000
+    TrueTrackLengthInMrd=/200.
+    num_lappd_hits =/ 200
+    num_pmt_hits =/ 200
     vtxX =/ 150.
     vtxY =/ 200.
     vtxZ =/ 150.
     #diffDirAbs                    # no scaling
-    #TrueTrackLengthInMrd=/200.    # already scaled in FindTrackLengthInWater
     #recoDWallR=/tank_radius       # already scaled in FindTrackLengthInWater
     #recoDWallZ=/2*tank_halfheight # already scaled in FindTrackLengthInWater
 
@@ -76,9 +93,6 @@ def Execute():
     ########### BDTG ############
     # read model from the disk
     modelfilename = Store.GetStoreVariable('EnergyReco','BDTMuonModelFile')
-    #pickle.dump(model, open(filename, 'wb'))
- 
-    # load the model from disk
     loaded_model = pickle.load(open(modelfilename, 'rb'))
     
     #############################
@@ -96,6 +110,14 @@ def Execute():
     # ----------------------
     Store.SetStoreVariable('EnergyReco','MuonEnergyReco',BDTGoutput_E)
     Store.SetStoreVariable('EnergyReco','MuonEnergyAccuracy',Y)
+    # Also keep a list of all previous accuracies for making a plot
+    evtnum = Store.GetStoreVariable('ANNIEEvent','EventNumber')
+    if evtnum==0:
+      YVec = []
+    else:
+      Yvec = Store.GetStoreVariable('EnergyReco','MuonEnergyAccuracyVec')
+    YVec.append(Y)
+    Store.SetStoreVariable('EnergyReco','MuonEnergyAccuracyVec',Yvec)
 
     #-----------------------------
     # Backward Compatibility
@@ -106,7 +128,6 @@ def Execute():
         return 1  # if not saving to legacy file, just return
     
     # check if this is the first execute iteration. if so, we'll create a header row first.
-    evtnum = Store.GetStoreVariable('ANNIEEvent','EventNumber')
     if evtnum==0:
         headers=['','MuonEnergy', 'RecoE']
         # convert to pandas dataframe
@@ -123,19 +144,6 @@ def Execute():
     #save results to .csv:
     df_final.to_csv(outputfilepath, float_format = '%.3f', mode='a', header=False, index=False)
 
-#    nbins=np.arange(-100,100,2)
-#    fig,ax0=plt.subplots(ncols=1, sharey=True)#, figsize=(8, 6))
-#    cmap = sns.light_palette('b',as_cmap=True)
-#    f=ax0.hist(np.array(Y), nbins, histtype='step', fill=True, color='gold',alpha=0.75)
-#    ax0.set_xlim(-100.,100.)
-#    ax0.set_xlabel('$\Delta E/E$ [%]')
-#    ax0.set_ylabel('Number of Entries')
-#    ax0.xaxis.set_label_coords(0.95, -0.08)
-#    ax0.yaxis.set_label_coords(-0.1, 0.71)
-#    title = "mean = %.2f, std = %.2f " % (np.array(Y).mean(), np.array(Y).std())
-#    plt.title(title)
-#    plt.savefig("DE_E.png")
- 
     return 1
 
 

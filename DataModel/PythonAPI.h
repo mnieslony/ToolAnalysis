@@ -3,16 +3,19 @@
 
 #include "BoostStore.h"
 #include <boost/core/demangle.hpp>
+#include <boost/lexical_cast.hpp>
 #include <typeinfo>
 #include <regex>
+#include <exception>
 #include <map>
 #include "DataModel.h"
 #include "BoostStore.h"
 
-std::map<std::string,std::string> typename_to_python_type{{"int","i"},{"long long","l"},{"double","d"},{"char","c"},{"std::string","s"},{"bool","i"}};
+static std::map<std::string,std::string> typename_to_python_type{{"int","i"},{"long long","l"},{"double","d"},{"char","c"},{"std::string","s"},{"bool","i"}};
 
-DataModel* gstore;        // m_data, set in PythonScript.cpp
-BoostStore* activestore;  // the Store within m_data requested by the python user
+static DataModel* gstore;        // m_data, set in PythonScript.cpp
+static Store* gconfig;           // the Store containing the current script's config variables
+static BoostStore* activestore;  // the Store within m_data requested by the python user
 
 static PyObject* GetStoreInt(PyObject *self, PyObject *args){
   const char *command;
@@ -93,7 +96,8 @@ template<typename T> PyObject* GetStoreVariable(std::string variablename, T temp
 }
 
 // specialization for std::string, which we must convert to char* before converting to Python object
-template<> PyObject* GetStoreVariable<std::string>(std::string variablename, std::string tempvar, bool isptr, bool isvector){
+template<>
+inline PyObject* GetStoreVariable<std::string>(std::string variablename, std::string tempvar, bool isptr, bool isvector){
   // get the variable from the BoostStore
   if(isvector){
     if(isptr){
@@ -136,7 +140,8 @@ template<> PyObject* GetStoreVariable<std::string>(std::string variablename, std
 }
 
 // specialization for Position, which we must converted to Python tuple
-template<> PyObject* GetStoreVariable<Position>(std::string variablename, Position tempvar, bool isptr, bool isvector){
+template<>
+inline PyObject* GetStoreVariable<Position>(std::string variablename, Position tempvar, bool isptr, bool isvector){
   // get the variable from the BoostStore
   if(not isvector){
     if(isptr){
@@ -176,7 +181,8 @@ template<> PyObject* GetStoreVariable<Position>(std::string variablename, Positi
 }
 
 // specialization for Direction, which we must convert to Python tuple
-template<> PyObject* GetStoreVariable<Direction>(std::string variablename, Direction tempvar, bool isptr, bool isvector){
+template<>
+inline PyObject* GetStoreVariable<Direction>(std::string variablename, Direction tempvar, bool isptr, bool isvector){
   // get the variable from the BoostStore
   if(not isvector){
     if(isptr){
@@ -221,7 +227,8 @@ template<> PyObject* GetStoreVariable<Direction>(std::string variablename, Direc
 }
 
 // specialization for TimeClass, which we must call GetNS before converting to Python object
-template<> PyObject* GetStoreVariable<TimeClass>(std::string variablename, TimeClass tempvar, bool isptr, bool isvector){
+template<>
+inline PyObject* GetStoreVariable<TimeClass>(std::string variablename, TimeClass tempvar, bool isptr, bool isvector){
   // get the variable from the BoostStore
   if(not isvector){
     if(isptr){
@@ -275,7 +282,29 @@ static PyObject* GetStoreVariable(PyObject *self, PyObject *args){
   
   // Set the activestore pointer to the appropriate BoostStore
   // =========================================================
-  if(strcmp(storename,"CStore")==0){
+  if(strcmp(storename,"Config")==0){
+    // config variables are retrieved from a Store, not a BoostStore, so we don't have access to the
+    // variable typename. On other other hand these variables are by definition passed through a text file,
+    // so we can always retrieve them as a string
+    std::string tempvar;
+    gconfig->Get(variablename,tempvar);
+    // for convenience we can also try to see if it's numeric:
+    try {
+      double tempnum = boost::lexical_cast<double>(tempvar);
+      // if we haven't thrown to the catch, we have something numeric.
+      // we could also try to check if it's integral and return a Python Long instead of Float
+      if(tempnum==std::llround(tempnum)){
+        long long tempnuml = std::llround(tempnum);
+        return Py_BuildValue("i", tempnuml);
+      } else {
+        return Py_BuildValue("d", tempnum);
+      }
+    }
+    catch(boost::bad_lexical_cast &e){
+      // not a recognisable number: just return as string
+      return Py_BuildValue("s", tempvar.c_str());
+    }
+  }else if(strcmp(storename,"CStore")==0){
     activestore= &(gstore->CStore);
   } else {
     if(gstore->Stores.count(storename)==0){
@@ -434,7 +463,8 @@ PyObject* SetStoreVariable(std::string variablename, PyObject* variableasobj, T 
 }
 
 // specialization for String objects; they need to be retrieved via a char* but converted to std::string before storage
-template<> PyObject* SetStoreVariable<std::string>(std::string variablename, PyObject* variableasobj, std::string tempvar, bool isiterable){
+template<>
+inline PyObject* SetStoreVariable<std::string>(std::string variablename, PyObject* variableasobj, std::string tempvar, bool isiterable){
   char* tempchars;
   if(isiterable){
     // construct a vector with the container elements

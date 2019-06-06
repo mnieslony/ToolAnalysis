@@ -3,7 +3,6 @@ import Store
 import sys
 import numpy as np
 import pandas as pd
-import tensorflow as tf
 import tempfile
 import random
 import csv
@@ -46,7 +45,8 @@ def Execute(Toolchain=True, trainingdatafilename=None, E_threshold=None, modelfi
     #--- place an upper limit on Muon energies we will train on, filtering only passing rows
     if Toolchain:
         E_threshold = Store.GetStoreVariable('EnergyReco','BDT_NuE_threshold')
-    dfsel_train=TrainingDataset.loc[TrainingDataset['neutrinoE'] < E_threshold]
+    #dfsel_train=TrainingDataset.loc[TrainingDataset['neutrinoE'] < E_threshold]
+    dfsel_train=TrainingDataset
 
     #--- print to check:
     print("check training sample: ",dfsel_train.head())
@@ -55,7 +55,7 @@ def Execute(Toolchain=True, trainingdatafilename=None, E_threshold=None, modelfi
     assert(dfsel_train.isnull().any().any()==False)
 
     # apply normalization scalings
-    dfsel_train_normalised = pd.DataFrame([ dfsel_train['DNNRecoLength']/600., dfsel_train['TrueTrackLengthInMrd'], dfsel_train['diffDirAbs'], dfsel_train['recoDWallR'], dfsel_train['recoDWallZ'], dfsel_train['totalLAPPDs']/1000., dfsel_train['totalPMTs']/1000., dfsel_train['vtxX']/150., dfsel_train['vtxY']/200., dfsel_train['vtxZ']/150. ]).T
+    dfsel_train_normalised = pd.DataFrame([ dfsel_train['DNNRecoLength']/600., dfsel_train['TrueTrackLengthInMrd']/200., dfsel_train['diffDirAbs'], dfsel_train['recoDWallR'], dfsel_train['recoDWallZ'], dfsel_train['totalLAPPDs']/200., dfsel_train['totalPMTs']/200., dfsel_train['vtxX']/150., dfsel_train['vtxY']/200., dfsel_train['vtxZ']/150. ]).T
 
     print("check train sample normalisation: ", dfsel_train_normalised.head())
 
@@ -140,7 +140,7 @@ def Execute(Toolchain=True, trainingdatafilename=None, E_threshold=None, modelfi
 
 if __name__ == "__main__":
     # Make the script runnable as a standalone python script too?
-    trainingdatafilename =  '../LocalFolder/vars_Ereco.csv'
+    trainingdatafilename =  '../LocalFolder/vars_Ereco_train_05202019.csv'
     testingdatafilename = '../LocalFolder/vars_Ereco.csv'
     modelfilename = '../LocalFolder/finalized_BDTmodel_forMuonEnergy.sav'
     E_threshold=2.

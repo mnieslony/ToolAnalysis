@@ -16,8 +16,16 @@ bool PythonScript::Initialise(std::string configfile, DataModel &data){
   m_variables.Get("InitialiseFunction",initialisefunction);
   m_variables.Get("ExecuteFunction",executefunction);
   m_variables.Get("FinaliseFunction",finalisefunction);
+  std::string scriptconfigfile="";
+  m_variables.Get("ConfigurationsFile",scriptconfigfile);
+
+  // Initialize a Store with the python script's variables
+  thisscriptsconfigstore.Initialise(scriptconfigfile);
 
   gstore=m_data;
+  // each time we're running this python script, set the global gconfig to point to it's configurations store
+  // so that calls to the PythonAPI for config values will return values from the correct store.
+  gconfig=&thisscriptsconfigstore;
 
   // Initialising Python
   pyinit=0;
@@ -121,6 +129,9 @@ bool PythonScript::Initialise(std::string configfile, DataModel &data){
 
 bool PythonScript::Execute(){
 
+  // make the config Store for this script accessible to the tool, should it need it in Execute
+  gconfig=&thisscriptsconfigstore;
+
   PyThreadState_Swap(pythread);
 
   if (pModule != NULL) {
@@ -164,6 +175,9 @@ bool PythonScript::Execute(){
 
 
 bool PythonScript::Finalise(){
+
+  // make the config Store for this script accessible to the tool, should it need it in Finalise
+  gconfig=&thisscriptsconfigstore;
   
   PyThreadState_Swap(pythread);  
   
