@@ -20,8 +20,25 @@ from sklearn.utils import shuffle
 from sklearn import linear_model, ensemble
 from sklearn.metrics import mean_squared_error
 import pickle
+import seaborn as sns
 
 def Initialise():
+    # make a plot of all the errors
+    # first retrieve all errors from Store
+    Yvec = Store.GetStoreVariable('EnergyReco','NeutrinoEnergyAccuracyVec')
+    # now make the plot
+    nbins=np.arange(-100,100,2)
+    fig,ax0=plt.subplots(ncols=1, sharey=True)#, figsize=(8, 6))
+    cmap = sns.light_palette('b',as_cmap=True)
+    f=ax0.hist(np.array(Y), nbins, histtype='step', fill=True, color='gold',alpha=0.75)
+    ax0.set_xlim(-100.,100.)
+    ax0.set_xlabel('$\Delta E/E$ [%]')
+    ax0.set_ylabel('Number of Entries')
+    ax0.xaxis.set_label_coords(0.95, -0.08)
+    ax0.yaxis.set_label_coords(-0.1, 0.71)
+    title = "mean = %.2f, std = %.2f " % (np.array(Y).mean(), np.array(Y).std())
+    plt.title(title)
+    plt.savefig("Nu_DE_E.png")
     return 1
 
 def Finalise():
@@ -58,13 +75,13 @@ def Execute():
     # Normalize them
     # --------------
     DNNRecoLength =/ 600.
-    num_lappd_hits =/ 1000
-    num_pmt_hits =/ 1000
+    TrueTrackLengthInMrd=/200.
+    num_lappd_hits =/ 200.
+    num_pmt_hits =/ 200.
     vtxX =/ 150.
     vtxY =/ 200.
     vtxZ =/ 150.
     #diffDirAbs                    # no scaling
-    #TrueTrackLengthInMrd=/200.    # already scaled in FindTrackLengthInWater
     #recoDWallR=/tank_radius       # already scaled in FindTrackLengthInWater
     #recoDWallZ=/2*tank_halfheight # already scaled in FindTrackLengthInWater
 
@@ -75,10 +92,7 @@ def Execute():
 
     ########### BDTG ############
     # read model from the disk
-    modelfilename = Store.GetStoreVariable('EnergyReco','BDTNeutrinoModelFile')
-    #pickle.dump(model, open(filename, 'wb'))
- 
-    # load the model from disk
+    modelfilename = Store.GetStoreVariable('Config','BDTNeutrinoModelFile')
     loaded_model = pickle.load(open(modelfilename, 'rb'))
     
     #############################
@@ -96,17 +110,24 @@ def Execute():
     # ----------------------
     Store.SetStoreVariable('EnergyReco','NeutrinoEnergyReco',BDTGoutput_E)
     Store.SetStoreVariable('EnergyReco','NeutrinoEnergyAccuracy',Y)
+    # Also keep a list of all previous accuracies for making a plot
+    evtnum = Store.GetStoreVariable('ANNIEEvent','EventNumber')
+    if evtnum==0:
+      YVec = []
+    else:
+      Yvec = Store.GetStoreVariable('EnergyReco','NeutrinoEnergyAccuracyVec')
+    YVec.append(Y)
+    Store.SetStoreVariable('EnergyReco','NeutrinoEnergyAccuracyVec',Yvec)
 
     #-----------------------------
     # Backward Compatibility
     #-----------------------------
     # append this entry to the old-style csv file, for validation while we migrate
-    outputfilepath = Store.GetStoreVariable('EnergyReco','NeutrinoEnergyPredictionsFile')
+    outputfilepath = Store.GetStoreVariable('Config','NeutrinoEnergyPredictionsFile')
     if outputfilepath == 'NA':
         return 1  # if not saving to legacy file, just return
     
     # check if this is the first execute iteration. if so, we'll create a header row first.
-    evtnum = Store.GetStoreVariable('ANNIEEvent','EventNumber')
     if evtnum==0:
         headers=['','NeutrinoEnergy', 'RecoE']
         # convert to pandas dataframe
@@ -123,19 +144,6 @@ def Execute():
     #save results to .csv:
     df_final.to_csv(outputfilepath, float_format = '%.3f', mode='a', header=False, index=False)
 
-#    nbins=np.arange(-100,100,2)
-#    fig,ax0=plt.subplots(ncols=1, sharey=True)#, figsize=(8, 6))
-#    cmap = sns.light_palette('b',as_cmap=True)
-#    f=ax0.hist(np.array(Y), nbins, histtype='step', fill=True, color='gold',alpha=0.75)
-#    ax0.set_xlim(-100.,100.)
-#    ax0.set_xlabel('$\Delta E/E$ [%]')
-#    ax0.set_ylabel('Number of Entries')
-#    ax0.xaxis.set_label_coords(0.95, -0.08)
-#    ax0.yaxis.set_label_coords(-0.1, 0.71)
-#    title = "mean = %.2f, std = %.2f " % (np.array(Y).mean(), np.array(Y).std())
-#    plt.title(title)
-#    plt.savefig("DE_E.png")
- 
     return 1
 
 

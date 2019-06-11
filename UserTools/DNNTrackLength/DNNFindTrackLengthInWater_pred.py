@@ -86,7 +86,7 @@ def Execute():
 
     # load weights
     if Toolchain:
-        weightsfilename = Store.GetStoreVariable('EnergyReco','TrackLengthWeightsFile')
+        weightsfilename = Store.GetStoreVariable('Config','TrackLengthWeightsFile')
     model.load_weights(weightsfilename)
 
     # Compile model
@@ -123,7 +123,7 @@ def Execute():
     # append this entry to the old-style csv file, for validation while we migrate
     # Append the predicted track length to the input file and write to new csv file
     #print(" saving .csv file with energy variables..")
-    outputfilepath = Store.GetStoreVariable('EnergyReco','TrackLengthPredictionsFile')
+    outputfilepath = Store.GetStoreVariable('Config','TrackLengthPredictionsFile')
     if outputfilepath == 'NA':
         return 1  # if not saving to legacy file, just return
     

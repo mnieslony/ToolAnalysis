@@ -48,7 +48,7 @@ def Execute(Toolchain=True, optimizationdatafilename=None):
     #--- events for optimization - MC events
     # get optimization data file path from store
     if Toolchain:
-        optimizationdatafilename = Store.GetStoreVariable('EnergyReco','TrackLengthOptimizationDataFile')
+        optimizationdatafilename = Store.GetStoreVariable('Config','TrackLengthOptimizationDataFile')
     # open the file
     optimizationfile = open(optimizationdatafilename)
     print("evts for optimization in: ",optimizationfile)

@@ -47,7 +47,7 @@ def Execute(Toolchain=True, trainingdatafilename=None, weightsfilename=None, tes
     #--- events for training - MC events
     # get training data file path from store
     if Toolchain:
-        trainingdatafilename = Store.GetStoreVariable('EnergyReco','TrackLengthTrainingDataFile')
+        trainingdatafilename = Store.GetStoreVariable('Config','TrackLengthTrainingDataFile')
     # open the file
     trainingfile = open(trainingdatafilename)
     print("evts for training in: ",trainingfile)
@@ -85,7 +85,7 @@ def Execute(Toolchain=True, trainingdatafilename=None, weightsfilename=None, tes
 
     # load weights
     if Toolchain:
-        weightsfilename = Store.GetStoreVariable('EnergyReco','TrackLengthWeightsFile')
+        weightsfilename = Store.GetStoreVariable('Config','TrackLengthWeightsFile')
     checkpoint = ModelCheckpoint(weightsfilename, monitor='val_loss', verbose=1, save_best_only=True, save_weights_only=True, mode='auto')
     callbacks_list = [checkpoint]
     # Run the model
@@ -107,7 +107,7 @@ def Execute(Toolchain=True, trainingdatafilename=None, weightsfilename=None, tes
     #-----------------------------
     # if we want to score the trained model, we need a test set
     if Toolchain:
-        testingdatafilename = Store.GetStoreVariable('EnergyReco','TrackLengthTestingDataFile')
+        testingdatafilename = Store.GetStoreVariable('Config','TrackLengthTestingDataFile')
     if testingdatafilename != 'NA':
         # open the file
         testfile = open(testdatafilename)

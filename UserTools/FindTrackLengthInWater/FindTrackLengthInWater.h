@@ -3,7 +3,6 @@
 
 #include <string>
 #include <iostream>
-#include <sstream>
 #include "ANNIEalgorithms.h"
 
 #include "Tool.h"
@@ -28,10 +27,6 @@ class FindTrackLengthInWater: public Tool {
   int maxhits0=1100;
   bool first=1; bool deny_access=0;
   int count1=0;
-  
-  std::ofstream csvfile;
-  std::vector<std::string> tracklengthtrainingfiles;
-  long long trainingentries;
   
   Geometry* anniegeom=nullptr;
   double tank_radius;

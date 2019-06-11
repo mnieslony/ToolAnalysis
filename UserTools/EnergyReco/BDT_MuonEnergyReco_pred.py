@@ -41,7 +41,7 @@ def Finalise():
     ax0.yaxis.set_label_coords(-0.1, 0.71)
     title = "mean = %.2f, std = %.2f " % (np.array(Y).mean(), np.array(Y).std())
     plt.title(title)
-    plt.savefig("DE_E.png")
+    plt.savefig("Mu_DE_E.png")
     return 1
 
 def Execute():
@@ -92,7 +92,7 @@ def Execute():
 
     ########### BDTG ############
     # read model from the disk
-    modelfilename = Store.GetStoreVariable('EnergyReco','BDTMuonModelFile')
+    modelfilename = Store.GetStoreVariable('Config','BDTMuonModelFile')
     loaded_model = pickle.load(open(modelfilename, 'rb'))
     
     #############################
@@ -123,7 +123,7 @@ def Execute():
     # Backward Compatibility
     #-----------------------------
     # append this entry to the old-style csv file, for validation while we migrate
-    outputfilepath = Store.GetStoreVariable('EnergyReco','MuonEnergyPredictionsFile')
+    outputfilepath = Store.GetStoreVariable('Config','MuonEnergyPredictionsFile')
     if outputfilepath == 'NA':
         return 1  # if not saving to legacy file, just return
     

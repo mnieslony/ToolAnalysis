@@ -33,7 +33,7 @@ def Execute(Toolchain=True, trainingdatafilename=None, E_threshold=None, modelfi
 
     #--- load events for training
     if Toolchain:
-        trainingdatafilename = Store.GetStoreVariable('EnergyReco','MuonEnergyTrainingDataFile')
+        trainingdatafilename = Store.GetStoreVariable('Config','MuonEnergyTrainingDataFile')
     print( "--- opening training file "+trainingdatafilename)
     trainingfile = open(trainingdatafilename)
     print("evts for training in: ",trainingfile)
@@ -44,7 +44,7 @@ def Execute(Toolchain=True, trainingdatafilename=None, E_threshold=None, modelfi
     TrainingDataset=trainingfiledata[['totalPMTs','totalLAPPDs','TrueTrackLengthInWater','neutrinoE','trueKE','diffDirAbs','TrueTrackLengthInMrd','recoDWallR','recoDWallZ','dirX','dirY','dirZ','vtxX','vtxY','vtxZ','DNNRecoLength']]
     #--- place an upper limit on Muon energies we will train on, filtering only passing rows
     if Toolchain:
-        E_threshold = Store.GetStoreVariable('EnergyReco','BDT_NuE_threshold')
+        E_threshold = Store.GetStoreVariable('Config','BDT_NuE_threshold')
     #dfsel_train=TrainingDataset.loc[TrainingDataset['neutrinoE'] < E_threshold]
     dfsel_train=TrainingDataset
 
@@ -79,7 +79,7 @@ def Execute(Toolchain=True, trainingdatafilename=None, E_threshold=None, modelfi
 
     # save the model to disk
     if Toolchain:
-        modelfilename = Store.GetStoreVariable('EnergyReco','BDTMuonModelFile')
+        modelfilename = Store.GetStoreVariable('Config','BDTMuonModelFile')
     pickle.dump(model, open(modelfilename, 'wb'))
     
     #############################
@@ -87,7 +87,7 @@ def Execute(Toolchain=True, trainingdatafilename=None, E_threshold=None, modelfi
     # Measure model metrics
     # load testing dataset: same process as for the training sample
     if Toolchain:
-        testingdatafilename = Store.GetStoreVariable('EnergyReco','MuonEnergyTestingDataFile')
+        testingdatafilename = Store.GetStoreVariable('Config','MuonEnergyTestingDataFile')
     if testingdatafilename == 'NA':
         return 1    # if we have no testing sample, we're done
     

@@ -52,7 +52,7 @@ def Execute(Toolchain=True, optimizationdatafilename=None, E_threshold=None):
 
     #--- load events for training
     if Toolchain:
-        optimizationdatafilename = Store.GetStoreVariable('EnergyReco','MuonEnergyOptimizationDataFile')
+        optimizationdatafilename = Store.GetStoreVariable('Config','MuonEnergyOptimizationDataFile')
     print( "--- opening training file "+optimization)
     optimizationfile = open(optimization)
     print("evts for optimization in: ",optimizationfile)
@@ -63,7 +63,7 @@ def Execute(Toolchain=True, optimizationdatafilename=None, E_threshold=None):
     OptimizationDataset=optimizationfiledata[['totalPMTs','totalLAPPDs','TrueTrackLengthInWater','neutrinoE','trueKE','diffDirAbs','TrueTrackLengthInMrd','recoDWallR','recoDWallZ','dirX','dirY','dirZ','vtxX','vtxY','vtxZ','DNNRecoLength']]
     #--- place an upper limit on Muon energies we will train on, filtering only passing rows
     if Toolchain:
-        E_threshold = Store.GetStoreVariable('EnergyReco','BDT_NuE_threshold')
+        E_threshold = Store.GetStoreVariable('Config','BDT_NuE_threshold')
     #dfsel_train=OptimizationDataset.loc[OptimizationDataset['neutrinoE'] < E_threshold]
     dfsel_train=OptimizationDataset
 
