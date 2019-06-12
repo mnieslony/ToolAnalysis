@@ -2,6 +2,15 @@
 
 PythonScript::PythonScript():Tool(){}
 
+// Putting this in DataModel/PythonAPI.cpp caused all manner of errors???
+PyMODINIT_FUNC
+PyInit_Store(void){
+    PyObject *module = PyModule_Create(&StoreModule);
+    if (module == NULL)
+        return NULL;
+    //import_array();  // Must be present for passing NumPy arrays to/from C++
+    return module;
+}
 
 bool PythonScript::Initialise(std::string configfile, DataModel &data){
 
@@ -30,6 +39,8 @@ bool PythonScript::Initialise(std::string configfile, DataModel &data){
   // Initialising Python
   pyinit=0;
   if(!(m_data->CStore.Get("PythonInit",pyinit))){
+    /* Add a built-in module, before Py_Initialize */
+    PyImport_AppendInittab("Store", PyInit_Store);
     Py_Initialize();
   }
 
@@ -43,8 +54,9 @@ bool PythonScript::Initialise(std::string configfile, DataModel &data){
 
   // Loading store API into python env
 //  Py_InitModule("Store", StoreMethods);
-  PyModule_Create(&StoreModule);
-  
+//  PyModule_Create(&StoreModule);
+  PyImport_ImportModule("Store");
+
   // Loading python script/module
   //  std::cout<<pythonscript.c_str()<<std::endl;
   //pName = PyString_FromString(pythonscript.c_str());

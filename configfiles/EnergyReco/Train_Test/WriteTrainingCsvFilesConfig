@@ -1,4 +1,4 @@
-verbosity 9
+verbosity 1
 # The WriteTrainingCsvFiles tool writes csv files that can be used for training/testing the 
 # machine learning python scripts.
 

@@ -99,7 +99,7 @@ def Execute(Toolchain=True, testingdatafilename=None, weightsfilename=None, pred
     # firstly, maybe we don't want to save the predictions at all. See if we've been given at least one file:
     if Toolchain:
         predictionsdatafilename = Store.GetStoreVariable('Config','TrackLengthPredictionsDataFile')
-    if (predictionsdatafilename = None) or (predictionsdatafilename = ''):
+    if (predictionsdatafilename is None) or ( predictionsdatafilename == ''):
         # no output files today
         return 1
     
@@ -117,7 +117,7 @@ def Execute(Toolchain=True, testingdatafilename=None, weightsfilename=None, pred
       predictionsdatafilename2 = Store.GetStoreVariable('Config','TrackLengthPredictionsDataFile2')
 
     # write to csv file(s)
-    if (firstfilesentries = None) or (firstfilesentries = 0) or (predictionsdatafilename2 = None) or (predictionsdatafilename2 = ''):
+    if (firstfilesentries is None) or (firstfilesentries == 0) or (predictionsdatafilename2 is None) or (predictionsdatafilename2 == ''):
         testfiledata.to_csv(predictionsdatafilename, float_format = '%.3f')
     else:
         testfiledata[firstfilesentries:].to_csv(predictionsdatafilename, float_format = '%.3f')

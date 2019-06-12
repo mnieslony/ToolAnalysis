@@ -94,7 +94,7 @@ bool LoadWCSim::Initialise(std::string configfile, DataModel &data){
 //	NumEvents=wcsimtree->GetEntries();
 //	WCSimEntry= new wcsimT(wcsimtree);
 	WCSimEntry= new wcsimT(MCFile.c_str(),verbosity);
-	NumEvents=WCSimEntry->GetEntries();
+//	NumEvents=WCSimEntry->GetEntries();
 	
 	gROOT->cd();
 	wcsimrootgeom = WCSimEntry->wcsimrootgeom;
@@ -163,16 +163,17 @@ bool LoadWCSim::Initialise(std::string configfile, DataModel &data){
 	
 	EventNumber=0;
 	MCEventNum=filestartoffset-1;
+	Log("LoadWCSim Tool: Reading entries from TChain starting from entry "+to_string(filestartoffset),v_message,verbosity);
 	MCTriggernum=0;
 	// pull the first entry with a trigger and use it's Date for the BeamStatus last recorded time. TODO
 	if(verbosity>1) cout<<"getting Run start time"<<endl;
 	do{
-		MCEventNum++;
+		++MCEventNum;
 		WCSimEntry->GetEntry(MCEventNum);
 	} while(WCSimEntry->wcsimrootevent->GetNumberOfEvents()==0);
 	atrigt = WCSimEntry->wcsimrootevent->GetTrigger(0);
 	TimeClass RunStartTime(atrigt->GetHeader()->GetDate());
-	MCEventNum=filestartoffset-1;
+	MCEventNum=filestartoffset;
 	MCFile = WCSimEntry->GetCurrentFile()->GetName();
 	m_data->Stores.at("ANNIEEvent")->Set("MCFile",MCFile);
 	
