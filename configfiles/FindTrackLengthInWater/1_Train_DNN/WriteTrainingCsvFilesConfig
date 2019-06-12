@@ -1,0 +1,13 @@
+verbosity 9
+# The WriteTrainingCsvFiles tool writes csv files that can be used for training/testing the 
+# machine learning python scripts.
+
+# Output file for training the track length in water DNN
+TrackLengthTrainingDataFile ../LocalFolder/wcsim_29_03_19_ANNIEp2v6_muonsonly_nodigit_BNB_Water_10k_22-05-17_DNN_training_input.csv
+
+# Optional output file for validating accuracy of the trained model
+TrackLengthTestingDataFile ../LocalFolder/wcsim_29_03_19_ANNIEp2v6_muonsonly_nodigit_BNB_Water_10k_22-05-17_DNN_testing_input.csv
+
+# If a testing file is to be generated, the following defines the number of entries
+# to write into the training file before switching output to the testing file
+DNNTrainingEntries 1000  # the first 1000 entries will go into the training file

@@ -26,7 +26,7 @@ def Initialise():
 def Finalise():
     return 1
 
-def Execute(Toolchain=True, trainingdatafilename=None, E_threshold=None, modelfilename=None, testingdatafilename=None):
+def Execute(Toolchain=True, trainingdatafilename=None, E_threshold=None, modelfilename=None):
     # Set TF random seed to improve reproducibility
     seed = 170
     np.random.seed(seed)
@@ -74,7 +74,7 @@ def Execute(Toolchain=True, trainingdatafilename=None, E_threshold=None, modelfi
     # train
     print("training BDTG...")
     net_hi_E = ensemble.GradientBoostingRegressor(**params)
-    model = net_hi_E.fit(features_train, labels_train)
+    model = net_hi_E.fit(features_train, labels_train)  # n.b. returns self: model==net_hi_E
     net_hi_E
 
     # save the model to disk
@@ -82,66 +82,11 @@ def Execute(Toolchain=True, trainingdatafilename=None, E_threshold=None, modelfi
         modelfilename = Store.GetStoreVariable('Config','BDTMuonModelFile')
     pickle.dump(model, open(modelfilename, 'wb'))
     
-    #############################
-
-    # Measure model metrics
-    # load testing dataset: same process as for the training sample
-    if Toolchain:
-        testingdatafilename = Store.GetStoreVariable('Config','MuonEnergyTestingDataFile')
-    if testingdatafilename == 'NA':
-        return 1    # if we have no testing sample, we're done
-    
-    print( "--- Opening test sample file" + testingdatafilename)
-    testingfile = open(testingdatafilename)
-    testingfiledata=pd.read_csv(testingfile)
-    testingfile.close()
-    TestingDataset=testingfiledata[['totalPMTs','totalLAPPDs','TrueTrackLengthInWater','neutrinoE','trueKE','diffDirAbs','TrueTrackLengthInMrd','recoDWallR','recoDWallZ','dirX','dirY','dirZ','vtxX','vtxY','vtxZ','DNNRecoLength']]
-    dfsel_test=TestingDataset.loc[TestingDataset['neutrinoE'] < E_threshold]
-    print("check testing sample: ",dfsel_test.head())
-    assert(dfsel_test.isnull().any().any()==False)
-
-    #--- normalise the sample parameters:
-    dfsel_test_normalised = pd.DataFrame([ dfsel_test['DNNRecoLength']/600., dfsel_test['TrueTrackLengthInMrd'], dfsel_test['diffDirAbs'], dfsel_test['recoDWallR'], dfsel_test['recoDWallZ'], dfsel_test['totalLAPPDs']/1000., dfsel_test['totalPMTs']/1000., dfsel_test['vtxX']/150., dfsel_test['vtxY']/200., dfsel_test['vtxZ']/150. ]).T
-    print("check test sample normalisation: ", dfsel_test_normalised.head())
-
-    #--- convert features and labels to numpy arrays:
-    features_test = np.array(dfsel_test_normalised[['DNNRecoLength','TrueTrackLengthInMrd','diffDirAbs','recoDWallR','recoDWallZ','totalLAPPDs','totalPMTs','vtxX','vtxY','vtxZ']])
-    labels_test = np.array(dfsel_test[['trueKE']])
-    print('events for testing: ',len(labels_test))
-    print("features_test.shape: ",features_test.shape)
-
-    #---- Predict on the test set and measure MSE
-    mse = mean_squared_error(labels_test, net_hi_E.predict(features_test))
-    print("MSE: %.4f" % mse)
-    if Toolchain:
-        Store.SetStoreVariable('EnergyReco','MuonEnergyMSE',mse)
- 
-    test_score = np.zeros((params['n_estimators'],), dtype=np.float64)
-    for i, y_pred in enumerate(net_hi_E.staged_predict(features_test)):
-        test_score[i] = net_hi_E.loss_(labels_test, y_pred)
-    if Toolchain:
-        Store.SetStoreVariable('EnergyReco','MuonEnergyLosses',test_score)
-
-#    fig,ax=plt.subplots(ncols=1, sharey=True)
-#    ax.plot(np.arange(params['n_estimators']) + 1, net_hi_E.train_score_, 'b-',
-#             label='Training Set Deviance')
-#    ax.plot(np.arange(params['n_estimators']) + 1, test_score, 'r-',
-#             label='Test Set Deviance')
-#     ax.set_ylim(0.,500.)
-#     ax.set_xlim(0.,n_estimators)
-#     ax.legend(loc='upper right')
-#     ax.set_ylabel('Least Absolute Deviations [MeV]')
-#     ax.set_xlabel('Number of Estimators')
-#     ax.yaxis.set_label_coords(-0.1, 0.6)
-#     ax.xaxis.set_label_coords(0.85, -0.08)
-#     plt.savefig("deviation_train_test.png")
-
     return 1
 
 if __name__ == "__main__":
     # Make the script runnable as a standalone python script too?
     trainingdatafilename =  '../LocalFolder/vars_Ereco_train_05202019.csv'
-    testingdatafilename = '../LocalFolder/vars_Ereco.csv'
     modelfilename = '../LocalFolder/finalized_BDTmodel_forMuonEnergy.sav'
     E_threshold=2.
-    Execute(False, trainingdatafilename, E_threshold, modelfilename, testingdatafilename)
+    Execute(False, trainingdatafilename, E_threshold, modelfilename)

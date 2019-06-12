@@ -1,5 +1,0 @@
-################ Prediction ###############
-PythonScript BDT_MuonEnergyReco_pred
-InitialiseFunction Initialise
-ExecuteFunction Execute
-FinaliseFunction Finalise

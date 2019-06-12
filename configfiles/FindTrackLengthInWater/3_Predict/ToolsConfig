@@ -1,5 +1,0 @@
-# train machine learning algorithms
-FindTrackLengthInWater FindTrackLengthInWater configfiles/FindTrackLengthInWater/3_Predict/FindTrackLengthInWaterConfig_predict
-DNNTrackLength PythonScript configfiles/FindTrackLengthInWater/3_Predict/DNNTrackLength_pred
-BDTNuEnergy PythonScript configfiles/FindTrackLengthInWater/3_Predict/BDTNuEnergyconfig_pred
-BDTMuEnergy PythonScript configfiles/FindTrackLengthInWater/3_Predict/BDTMuEnergyconfig_pred

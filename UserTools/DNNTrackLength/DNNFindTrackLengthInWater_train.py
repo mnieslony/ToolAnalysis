@@ -1,4 +1,4 @@
-##### Script Track Length Reconstruction in the water tank 
+##### Script to Train DNN for Track Length Reconstruction in the water tank 
 import Store
 import sys
 import glob
@@ -38,7 +38,7 @@ def create_model():
     model.compile(loss='mean_squared_error', optimizer='Adamax', metrics=['accuracy'])
     return model
 
-def Execute(Toolchain=True, trainingdatafilename=None, weightsfilename=None, testingdatafilename=None):
+def Execute(Toolchain=True, trainingdatafilename=None, weightsfilename=None):
     # train the model
     # Set TF random seed to improve reproducibility
     seed = 150
@@ -103,37 +103,10 @@ def Execute(Toolchain=True, trainingdatafilename=None, weightsfilename=None, tes
     ax2.legend(['train', 'test'], loc='upper left')
     plt.savefig("keras_train_test.pdf")
 
-    # Score accuracy
-    #-----------------------------
-    # if we want to score the trained model, we need a test set
-    if Toolchain:
-        testingdatafilename = Store.GetStoreVariable('Config','TrackLengthTestingDataFile')
-    if testingdatafilename != 'NA':
-        # open the file
-        testfile = open(testdatafilename)
-        print("evts for testing in: ",testfile)
-        # read into a pandas structure
-        testfiledata = pd.read_csv(testfile)
-        testfile.close()
-        # convert to 2D numpy array
-        TestingDataset = np.array(testfiledata)
-        # split the numpy array up into sub-arrays
-        testfeatures, testlambdamax, testlabels, testrest = np.split(TestingDataset,[2203,2204,2205],axis=1)
-        # scale the features
-        testfeatures_transformed = scaler.transform(testfeatures)
-        
-        # estimate accuracy on whole dataset using loaded weights
-        scores = estimator.evaluate(testfeatures_transformed, testlabels, verbose=0)
-        print("%s: %.2f%%" % (estimator.metrics_names[1], scores[1]*100))
-
-        if Toolchain:
-            Store.SetStoreVariable('EnergyReco','DNNTrackLengthTrainScore',scores[1]*100)
-
     return 1
 
 if __name__ == "__main__":
     # Make the script runnable as a standalone python script too?
     trainingdatafilename = '../LocalFolder/data_forRecoLength_05202019.csv'
-    testingdatafilename = '../LocalFolder/data_forRecoLength_05202019.csv'
     weightsfilename = 'weights_bets.hdf5'
-    Execute(False, trainingdatafilename, weightsfilename, testingdatafilename)
+    Execute(False, trainingdatafilename, weightsfilename)

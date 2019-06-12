@@ -25,6 +25,7 @@ class WriteTrainingCsvFiles: public Tool {
   bool Finalise(); ///< Finalise funciton used to clean up resorces.
   
   private:
+  int maxhits0=1100;
   std::ofstream csvfile;
   std::vector<std::string> tracklengthtrainingfiles;
   long long trainingentries;

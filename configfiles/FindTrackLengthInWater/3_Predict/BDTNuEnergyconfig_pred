@@ -1,5 +1,0 @@
-################ Prediction ###############
-PythonScript BDT_NeutrinoEnergyReco_pred
-InitialiseFunction Initialise
-ExecuteFunction Execute
-FinaliseFunction Finalise

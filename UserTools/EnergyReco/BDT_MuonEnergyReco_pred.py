@@ -76,8 +76,8 @@ def Execute():
     # --------------
     DNNRecoLength =/ 600.
     TrueTrackLengthInMrd=/200.
-    num_lappd_hits =/ 200
-    num_pmt_hits =/ 200
+    num_lappd_hits =/ 200.
+    num_pmt_hits =/ 200.
     vtxX =/ 150.
     vtxY =/ 200.
     vtxZ =/ 150.

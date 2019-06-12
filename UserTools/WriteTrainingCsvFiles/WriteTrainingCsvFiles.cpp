@@ -111,69 +111,87 @@ bool WriteTrainingCsvFiles::Execute(){
   std::cout<<"EventNumber: "<<EventNumber<<endl;
   // Not every event is written to file: check if this one passed checks:
   uint32_t ThisEvtNum;
-  m_data->Stores.at("EnergyReco")->Set("ThisEvtNum",ThisEvtNum);
+  m_data->Stores.at("EnergyReco")->Get("ThisEvtNum",ThisEvtNum);
   if(ThisEvtNum!=EventNumber){ return true; } // this event didn't pass checks; don't write this entry
   
   // Retrieve variables from BoostStore
   // ==================================
-  m_data->Stores.at("EnergyReco")->Set("lambda_vec",lambda_vector);
-  m_data->Stores.at("EnergyReco")->Set("digit_ts_vec",digitT);
-  m_data->Stores.at("EnergyReco")->Set("lambda_max",lambda_max);
-  m_data->Stores.at("EnergyReco")->Set("num_pmt_hits",totalPMTs);
-  m_data->Stores.at("EnergyReco")->Set("num_lappd_hits",totalLAPPDs);
-  m_data->Stores.at("EnergyReco")->Set("lambda_max",lambda_max);
-  m_data->Stores.at("EnergyReco")->Set("TrueTrackLengthInWater",TrueTrackLengthInWater2);
-  m_data->Stores.at("EnergyReco")->Set("trueNeuE",TrueNeutrinoEnergy);
-  m_data->Stores.at("EnergyReco")->Set("trueE",trueEnergy);
-  m_data->Stores.at("EnergyReco")->Set("diffDirAbs2",diffDirAbs2);
-  m_data->Stores.at("EnergyReco")->Set("TrueTrackLengthInMrd2",TrueTrackLengthInMrd2);
+  // First we need to declare the variables to fill
+  std::vector<double> lambda_vector;
+  std::vector<double> digitT;
+  double lambda_max;
+  int totalPMTs =0; // number of PMT hits in the event
+  int totalLAPPDs = 0; // number of LAPPD hits in the event
+  float TrueTrackLengthInWater2;
+  double TrueNeutrinoEnergy;
+  double trueEnergy;
+  float diffDirAbs2;
+  float TrueTrackLengthInMrd2;
+  float recoDWallR2;
+  float recoDWallZ2;
+  Direction dirVec;
+  Position vtxVec;
+  double recoVtxFOM;
+  Int_t recoStatus;
+  double deltaVtxR;
+  double deltaAngle;
+  
+  // Then do the retrieval TODO should check all these retrievals succeed
+  m_data->Stores.at("EnergyReco")->Get("lambda_vec",lambda_vector);
+  m_data->Stores.at("EnergyReco")->Get("digit_ts_vec",digitT);
+  m_data->Stores.at("EnergyReco")->Get("lambda_max",lambda_max);
+  m_data->Stores.at("EnergyReco")->Get("num_pmt_hits",totalPMTs);
+  m_data->Stores.at("EnergyReco")->Get("num_lappd_hits",totalLAPPDs);
+  m_data->Stores.at("EnergyReco")->Get("TrueTrackLengthInWater",TrueTrackLengthInWater2);
+  m_data->Stores.at("EnergyReco")->Get("trueNeuE",TrueNeutrinoEnergy);
+  m_data->Stores.at("EnergyReco")->Get("trueE",trueEnergy);
+  m_data->Stores.at("EnergyReco")->Get("diffDirAbs2",diffDirAbs2);
+  m_data->Stores.at("EnergyReco")->Get("TrueTrackLengthInMrd2",TrueTrackLengthInMrd2);
   // FIXME naming, if training are these actually trueDWallR2?
-  m_data->Stores.at("EnergyReco")->Set("recoDWallR2",recoDWallR2);
-  m_data->Stores.at("EnergyReco")->Set("recoDWallZ2",recoDWallZ2);
-  m_data->Stores.at("EnergyReco")->Set("dirVec",theExtendedVertex.GetDirection());
-  m_data->Stores.at("EnergyReco")->Set("vtxVec",theExtendedVertex.GetPosition());
-  m_data->Stores.at("EnergyReco")->Set("recoVtxFOM",recoVtxFOM);
-  m_data->Stores.at("EnergyReco")->Set("recoStatus",recoStatus);
-  m_data->Stores.at("EnergyReco")->Set("deltaVtxR",deltaVtxR);
-  m_data->Stores.at("EnergyReco")->Set("deltaAngle",deltaAngle);
+  m_data->Stores.at("EnergyReco")->Get("recoDWallR2",recoDWallR2);
+  m_data->Stores.at("EnergyReco")->Get("recoDWallZ2",recoDWallZ2);
+  m_data->Stores.at("EnergyReco")->Get("dirVec",dirVec);
+  m_data->Stores.at("EnergyReco")->Get("vtxVec",vtxVec);
+  m_data->Stores.at("EnergyReco")->Get("recoVtxFOM",recoVtxFOM);
+  m_data->Stores.at("EnergyReco")->Get("recoStatus",recoStatus);
+  m_data->Stores.at("EnergyReco")->Get("deltaVtxR",deltaVtxR);
+  m_data->Stores.at("EnergyReco")->Get("deltaAngle",deltaAngle);
   
   // Write to .csv file
   // ==================
   // pick which file to write to
-  if(tracklengthtrainingfiles.size()){  // if any
-     if((tracklengthtrainingfiles.size()>1) && (EventNumber=trainingentries)){    // once we've processed requested
-       csvfile.close();                                                           // number of training entries
-       csvfile.open(tracklengthtrainingfiles.back(), std::fstream::app);          // switch output to testing file
-     }
-     for(int i=0; i<maxhits0;++i){
-        csvfile<<lambda_vector.at(i)<<",";
-     }
-     for(int i=0; i<maxhits0;++i){
-        csvfile<<digitT.at(i)<<",";
-     }
-     csvfile<<lambda_max<<",";
-     csvfile<<totalPMTs<<",";
-     csvfile<<totalLAPPDs<<",";
-     csvfile<<lambda_max<<",";
-     csvfile<<TrueTrackLengthInWater2<<",";
-     csvfile<<TrueNeutrinoEnergy<<",";
-     csvfile<<trueEnergy<<",";
-     csvfile<<diffDirAbs2<<",";
-     csvfile<<TrueTrackLengthInMrd2<<",";
-     csvfile<<recoDWallR2<<",";
-     csvfile<<recoDWallZ2<<",";
-     csvfile<<dirX<<",";
-     csvfile<<dirY<<",";
-     csvfile<<dirZ<<",";
-     csvfile<<vtxX<<",";
-     csvfile<<vtxY<<",";
-     csvfile<<vtxZ<<",";
-     csvfile<<recoVtxFOM<<",";
-     csvfile<<recoStatus<<",";
-     csvfile<<deltaVtxR<<",";
-     csvfile<<deltaAngle;
-     csvfile<<'\n';
-  }
+   if((tracklengthtrainingfiles.size()>1) && (EventNumber=trainingentries)){    // once we've processed requested
+     csvfile.close();                                                           // number of training entries
+     csvfile.open(tracklengthtrainingfiles.back(), std::fstream::app);          // switch output to testing file
+   }
+   for(int i=0; i<maxhits0;++i){
+      csvfile<<lambda_vector.at(i)<<",";
+   }
+   for(int i=0; i<maxhits0;++i){
+      csvfile<<digitT.at(i)<<",";
+   }
+   csvfile<<lambda_max<<",";
+   csvfile<<totalPMTs<<",";
+   csvfile<<totalLAPPDs<<",";
+   csvfile<<lambda_max<<",";
+   csvfile<<TrueTrackLengthInWater2<<",";
+   csvfile<<TrueNeutrinoEnergy<<",";
+   csvfile<<trueEnergy<<",";
+   csvfile<<diffDirAbs2<<",";
+   csvfile<<TrueTrackLengthInMrd2<<",";
+   csvfile<<recoDWallR2<<",";
+   csvfile<<recoDWallZ2<<",";
+   csvfile<<dirVec.X()<<",";
+   csvfile<<dirVec.Y()<<",";
+   csvfile<<dirVec.Z()<<",";
+   csvfile<<vtxVec.X()<<",";
+   csvfile<<vtxVec.Y()<<",";
+   csvfile<<vtxVec.Z()<<",";
+   csvfile<<recoVtxFOM<<",";
+   csvfile<<recoStatus<<",";
+   csvfile<<deltaVtxR<<",";
+   csvfile<<deltaAngle;
+   csvfile<<'\n';
   
   return true;
 }

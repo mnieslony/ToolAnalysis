@@ -1,5 +1,0 @@
-################ Prediction ###############
-PythonScript DNNFindTrackLengthInWater_pred
-InitialiseFunction Initialise
-ExecuteFunction Execute
-FinaliseFunction Finalise
