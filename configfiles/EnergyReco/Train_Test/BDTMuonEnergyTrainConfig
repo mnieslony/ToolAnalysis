@@ -2,10 +2,10 @@
 # Access them by retrieving the corresponding variable from the 'Config' store
 
 # BDT model file to write
-BDTNeutrinoModelFile ../LocalFolder/finalized_BDTmodel_forMuonEnergy.sav
+BDTMuonModelFile ../LocalFolder/finalized_BDTmodel_forMuonEnergy.sav
 
 # training data
-NeutrinoEnergyTrainingDataFile ../LocalFolder/vars_Ereco_train_05202019.csv
+MuonEnergyTrainingDataFile ../LocalFolder/BDT_training_input.csv
 
-# deprecated: only train with neutrinos below this threshold
+# deprecated: only train with muons below this threshold
 BDT_NuE_threshold 2.0  # [GeV]

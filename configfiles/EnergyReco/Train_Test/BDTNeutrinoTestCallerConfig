@@ -1,0 +1,9 @@
+PythonScript BDT_NeutrinoEnergyReco_test
+############### Testing #################
+# Note: We want this to run after the training, which in this Toolchain occurs during
+# the Finalise phase. We therefore need to do testing also in the Finalise phase,
+# which we can do by switching the Execute and Finalise functions.
+InitialiseFunction Initialise
+ExecuteFunction Finalise
+FinaliseFunction Execute
+ConfigurationsFile configfiles/EnergyReco/Train_Test/BDTNeutrinoEnergyTestConfig

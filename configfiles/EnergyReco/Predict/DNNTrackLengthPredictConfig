@@ -1,0 +1,8 @@
+# This config file stores variables that may be retrieved by the python script
+# Access them by retrieving the corresponding variable from the 'Config' store
+
+# model weights file
+TrackLengthWeightsFile ../LocalFolder/weights_bets.hdf5
+
+# output file for predictions, if we want to make a legacy-style csv output
+TrackLengthPredictionsDataFile ../LocalFolder/DNN_predict_output.csv  # use 'NA' to skip

@@ -7,4 +7,4 @@ IsMC 1
 # There are three configurations: "PMT_only", "LAPPD_only", "All"
 PhotoDetectorConfiguration All
 #File must be in /pnfs/ space when loading on Fermilab cluster
-LAPPDIDFile configfiles/FindTrackLengthInWater/1_Train_DNN/LAPPDIDs.txt
+LAPPDIDFile configfiles/EnergyReco/Predict/LAPPDIDs.txt

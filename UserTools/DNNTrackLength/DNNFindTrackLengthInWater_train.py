@@ -100,13 +100,13 @@ def Execute(Toolchain=True, trainingdatafilename=None, weightsfilename=None):
     ax2.set_ylabel('Performance')
     ax2.set_xlabel('Epochs')
     #ax2.set_xlim(0.,10.)
-    ax2.legend(['train', 'test'], loc='upper left')
-    plt.savefig("keras_train_test.pdf")
+    ax2.legend(['loss', 'val_loss'], loc='upper left')
+    plt.savefig("../LocalFolder/keras_DNN_training_loss.pdf")
 
     return 1
 
 if __name__ == "__main__":
     # Make the script runnable as a standalone python script too?
-    trainingdatafilename = '../LocalFolder/data_forRecoLength_05202019.csv'
-    weightsfilename = 'weights_bets.hdf5'
+    trainingdatafilename = '../LocalFolder/DNN_training_input.csv'
+    weightsfilename = '../LocalFolder/weights_bets.hdf5'
     Execute(False, trainingdatafilename, weightsfilename)

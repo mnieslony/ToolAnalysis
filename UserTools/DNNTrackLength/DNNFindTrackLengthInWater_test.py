@@ -28,7 +28,7 @@ def Initialise():
 def Finalise():
     return 1
 
-def Execute(Toolchain=True, testingdatafilename=None, weightsfilename=None, predctionsdatafilename=None):
+def Execute(Toolchain=True, testingdatafilename=None, weightsfilename=None, predictionsdatafilename=None, firstfilesentries=None, predictionsdatafilename2=None):
     
     # Load Data
     #-----------------------------
@@ -98,8 +98,8 @@ def Execute(Toolchain=True, testingdatafilename=None, weightsfilename=None, pred
     
     # firstly, maybe we don't want to save the predictions at all. See if we've been given at least one file:
     if Toolchain:
-        predctionsdatafilename = Store.GetStoreVariable('Config','TrackLengthPredictionsDataFile')
-    if (predctionsdatafilename = None) or (predctionsdatafilename = ''):
+        predictionsdatafilename = Store.GetStoreVariable('Config','TrackLengthPredictionsDataFile')
+    if (predictionsdatafilename = None) or (predictionsdatafilename = ''):
         # no output files today
         return 1
     
@@ -112,22 +112,24 @@ def Execute(Toolchain=True, testingdatafilename=None, weightsfilename=None, pred
     testfiledata.insert(2218, 'DNNRecoLength', outputdataframe['DNNRecoLength'].values, allow_duplicates="True")
 
     # check if we're splitting the output into two files (for training/testing the BDTs)
-    firstfilesentries = Store.GetStoreVariable('Config','FirstFileEntries')
-    predctionsdatafilename2 = Store.GetStoreVariable('Config','TrackLengthPredictionsDataFile2')
+    if Toolchain:
+      firstfilesentries = Store.GetStoreVariable('Config','FirstFileEntries')
+      predictionsdatafilename2 = Store.GetStoreVariable('Config','TrackLengthPredictionsDataFile2')
 
     # write to csv file(s)
-    if (firstfilesentries = None) or (firstfilesentries = 0) or (predctionsdatafilename2 = None) or (predctionsdatafilename2 = ''):
-        testfiledata.to_csv(predctionsdatafilename, float_format = '%.3f')
+    if (firstfilesentries = None) or (firstfilesentries = 0) or (predictionsdatafilename2 = None) or (predictionsdatafilename2 = ''):
+        testfiledata.to_csv(predictionsdatafilename, float_format = '%.3f')
     else:
-        testfiledata[firstfilesentries:].to_csv(predctionsdatafilename, float_format = '%.3f')
-        testfiledata[:firstfilesentries].to_csv(predctionsdatafilename2, float_format = '%.3f')
+        testfiledata[firstfilesentries:].to_csv(predictionsdatafilename, float_format = '%.3f')
+        testfiledata[:firstfilesentries].to_csv(predictionsdatafilename2, float_format = '%.3f')
 
     return 1
 
 if __name__ == "__main__":
     # Make the script runnable as a standalone python script too?
-    testingdatafilename = '../LocalFolder/data_forRecoLength_05202019.csv'
-    predctionsdatafilename = '../LocalFolder/vars_Ereco_train_06082019.csv'
-    predctionsdatafilename2 = '../LocalFolder/vars_Ereco_test_06082019.csv'
-    weightsfilename = 'weights_bets.hdf5'
-    Execute(False, testingdatafilename, weightsfilename, predctionsdatafilename, predctionsdatafilename2)
+    testingdatafilename = '../LocalFolder/DNN_testing_input.csv'
+    weightsfilename = '../LocalFolder/weights_bets.hdf5'
+    predictionsdatafilename = '../LocalFolder/BDT_training_input.csv'
+    firstfilesentries = 1000
+    predictionsdatafilename2 = '../LocalFolder/BDT_testing_input.csv'
+    Execute(False, testingdatafilename, weightsfilename, predictionsdatafilename, firstfilesentries, predictionsdatafilename2)

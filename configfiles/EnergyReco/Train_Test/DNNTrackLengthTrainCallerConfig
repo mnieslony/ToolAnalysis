@@ -7,4 +7,4 @@ PythonScript DNNFindTrackLengthInWater_train
 InitialiseFunction Initialise
 ExecuteFunction Finalise
 FinaliseFunction Execute
-ConfigurationsFile configfiles/FindTrackLengthInWater/1_Train_DNN/DNNTrackLengthTrainConfig
+ConfigurationsFile configfiles/EnergyReco/Train_Test/DNNTrackLengthTrainConfig

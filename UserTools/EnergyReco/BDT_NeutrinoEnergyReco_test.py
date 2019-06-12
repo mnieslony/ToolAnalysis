@@ -48,7 +48,7 @@ def Execute(Toolchain=True, testingdatafilename=None, E_threshold=None, modelfil
 
     #--- convert features and labels to numpy arrays:
     features_test = np.array(dfsel_test_normalised[['DNNRecoLength', 'TrueTrackLengthInMrd', 'diffDirAbs', 'recoDWallR', 'recoDWallZ', 'totalLAPPDs', 'totalPMTs', 'vtxX', 'vtxY', 'vtxZ']])
-    labels_test = 1000.*np.array(dfsel_test[['trueKE']])
+    labels_test = np.array(dfsel_test[['trueKE']])
     print('events for testing: ',len(labels_test))
     print("features_test.shape: ",features_test.shape)
 
@@ -100,8 +100,9 @@ def Execute(Toolchain=True, testingdatafilename=None, E_threshold=None, modelfil
 #     plt.savefig("deviation_train_test.png")
 
     # write predictions to the old-style csv file, for validation while we migrate
-    outputfilepath = Store.GetStoreVariable('Config','NeutrinoEnergyPredictionsFile')
-    if outputfilepath == 'NA':
+    if Toolchain:
+        predictionsdatafilename = Store.GetStoreVariable('Config','MuonEnergyPredictionsFile')
+    if predictionsdatafilename == 'NA':
         return 1  # if not saving to legacy file, just return
     # build a pandas DataFrame from the predicted result
     df1 = pd.DataFrame(labels,columns=['NeutrinoEnergy'])
@@ -113,7 +114,7 @@ def Execute(Toolchain=True, testingdatafilename=None, E_threshold=None, modelfil
 
 if __name__ == "__main__":
     # Make the script runnable as a standalone python script too?
-    testingdatafilename = '../LocalFolder/vars_Ereco_test_05202019.csv'
+    testingdatafilename = '../LocalFolder/BDT_testing_input.csv'
     predictionsdatafilename = '../LocalFolder/E_Nu_reco_results.csv'
     modelfilename = '../LocalFolder/finalized_BDTmodel_forNeutrinoEnergy.sav'
     E_threshold=2.

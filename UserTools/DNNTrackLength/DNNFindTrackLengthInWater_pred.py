@@ -38,20 +38,6 @@ def Execute():
     
     # Load Data
     #-----------------------------
-    
-    #--- events for predicting - MC events
-    #filein = open(str(infile))
-    #print("evts for predicting in: ",filein)
-    #filedata = pd.read_csv(filein)
-    #Dataset = np.array(filedata)
-    #features, lambdamax, labels, rest = np.split(Dataset,[2203,2204,2205],axis=1)
-    # The above imports the csv file into one continguous array, then splits it up, putting elements
-    # 0-2202 into 'features', element 2203 into 'lambdamax', 2204 into 'labels' and 2205+ into 'rest'
-    ## csv file columns are:
-    ## 0-1099: hit lambda values, 1100-2199: hit times, 2200: lambda_max, 2201: Num PMT hits,
-    ## 2202: Num LAPPD hits, 2203: lambda_max (again), 2204: TrueTrackLengthInWater, 2205+: nuE, muE ... etc
-    
-    # equivalent using BoostStore variables
     print( "--- loading input variables from store!")
     hit_lambdas = Store.GetStoreVariable('EnergyReco','lambda_vec')  # std::vectors in the Store are returned
     hit_times = Store.GetStoreVariable('EnergyReco','digit_ts_vec')  # as python lists
@@ -140,19 +126,8 @@ def Execute():
         # write the headers to file
         headersframe.T.to_csv(outputfilepath,header=False,index=False)
 
-    # combine true and predicted track lengths into a numpy array
-    #data = np.concatenate((test_y, y_predicted),axis=1)
-    # convert to pandas dataframe with headers
-    #df=pd.DataFrame(data, columns=['TrueTrackLengthInWater','DNNRecoLength'])
-    # combine with loaded file data ...
-    #df_final = pd.concat([filedata,df], axis=1).drop(['lambda_max.1'], axis=1)  # '.1' added by pandas
-    # ...
-    # but we no longer have the 'filedata' array. This array previously contained:
-    # [features, lambdamax, labels, rest]
-    # where 'rest' included
-    # [nuE, muE, diffDirAbs2, TrueTrackLengthInMrd2, recoDWallR2, recoDWallZ2, dirX, dirY, dirZ, vtxX, vtxY, vtxZ]
-    # but many of these variables are no longer loaded as they're not needed in this script.
-    # For legacy/testing, we can load them here to produce a complete csv file...
+    # Many of the variables normally written to legacy csv file are not needed for the DNN;
+    # they're written to the file as they're needed for BDT training.
     truenue = Store.GetStoreVariable('EnergyReco','trueNeuE')
     truemue = Store.GetStoreVariable('EnergyReco','trueEnergy')
     diffdirabs = Store.GetStoreVariable('EnergyReco','diffDirAbs2')

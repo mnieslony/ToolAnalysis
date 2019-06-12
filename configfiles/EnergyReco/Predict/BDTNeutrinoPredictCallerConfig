@@ -1,0 +1,6 @@
+PythonScript BDT_NeutrinoEnergyReco_pred
+############### Prediction #################
+InitialiseFunction Initialise
+ExecuteFunction Execute
+FinaliseFunction Finalise
+ConfigurationsFile configfiles/EnergyReco/Predict/BDTNeutrinoEnergyPredictConfig

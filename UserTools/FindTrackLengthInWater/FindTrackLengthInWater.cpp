@@ -105,7 +105,7 @@ bool FindTrackLengthInWater::Execute(){
    }
    */
    // XXX FIXME PLACEHOLDERS UNTIL WE HAVE GENIE INFO XXX
-   TrueNeutrinoEnergy =1.;
+   TrueNeutrinoEnergy =1000.;  // XXX Must be in [MeV]
    TrueInteractionType = "QES - Weak[CC]";
    
    
@@ -127,7 +127,7 @@ bool FindTrackLengthInWater::Execute(){
    // Get info
    TrueTrackLengthInWater = primarymuon->GetTrackLengthInTank();
    TrueTrackLengthInMrd = primarymuon->GetTrackLengthInMrd();
-   trueEnergy = primarymuon->GetStartEnergy();
+   trueEnergy = 1000.*primarymuon->GetStartEnergy();  // [MeV]
    deltaVtxR = 100.*(theExtendedVertex.GetPosition()-primarymuon->GetStartVertex()).Mag();
   double cosphi = primarymuon->GetStartDirection().X()*theExtendedVertex.GetDirection().X()+
                 primarymuon->GetStartDirection().Y()*theExtendedVertex.GetDirection().Y()+
@@ -226,9 +226,6 @@ bool FindTrackLengthInWater::Execute(){
        // =====================================
        float recoDWallR2      = recoDWallR/tank_radius;
        float recoDWallZ2      = recoDWallZ/tank_halfheight;
-//       float lambda_max_2     = TMath::Abs(lambda_max)/500;
-//       float totalPMTs2=double(totalPMTs)/1000.;
-//       float totalLAPPDs2=double(totalLAPPDs)/1000.;
        float TrueTrackLengthInWater2 = TrueTrackLengthInWater*100.;  // convert to [cm]
        float TrueTrackLengthInMrd2 = TrueTrackLengthInMrd*100.;      // convert to [cm]
        // we need to normalise the hit time and lambda vectors to fixed dimensions to match the DNN
@@ -248,7 +245,6 @@ bool FindTrackLengthInWater::Execute(){
         m_data->Stores.at("EnergyReco")->Set("trueE",trueEnergy);
         m_data->Stores.at("EnergyReco")->Set("diffDirAbs2",diffDirAbs2);
         m_data->Stores.at("EnergyReco")->Set("TrueTrackLengthInMrd2",TrueTrackLengthInMrd2);
-        // FIXME naming, if training are these actually trueDWallR2?
         m_data->Stores.at("EnergyReco")->Set("recoDWallR2",recoDWallR2);
         m_data->Stores.at("EnergyReco")->Set("recoDWallZ2",recoDWallZ2);
         m_data->Stores.at("EnergyReco")->Set("dirVec",theExtendedVertex.GetDirection());

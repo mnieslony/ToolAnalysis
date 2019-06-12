@@ -1,11 +1,11 @@
 # This config file stores variables that may be retrieved by the python script
 # Access them by retrieving the corresponding variable from the 'Config' store
 
-# BDT model file to write
+# BDT model file to load
 BDTMuonModelFile ../LocalFolder/finalized_BDTmodel_forMuonEnergy.sav
 
-# training data
-MuonEnergyTrainingDataFile ../LocalFolder/vars_Ereco_train_05202019.csv
+# for generating a legacy-style csv output
+MuonEnergyPredictionsFile ../LocalFolder/BDT_MuE_predict_output.csv     # Use 'NA' to skip
 
-# deprecated: only train with muons below this threshold
+# deprecated: only train with neutrinos below this threshold
 BDT_NuE_threshold 2.0  # [GeV]

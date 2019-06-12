@@ -86,7 +86,7 @@ def Execute(Toolchain=True, trainingdatafilename=None, E_threshold=None, modelfi
 
 if __name__ == "__main__":
     # Make the script runnable as a standalone python script too?
-    trainingdatafilename =  '../LocalFolder/vars_Ereco_train_05202019.csv'
+    trainingdatafilename =  '../LocalFolder/BDT_training_input.csv'
     modelfilename = '../LocalFolder/finalized_BDTmodel_forMuonEnergy.sav'
     E_threshold=2.
     Execute(False, trainingdatafilename, E_threshold, modelfilename)

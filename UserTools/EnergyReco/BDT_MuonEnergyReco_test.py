@@ -38,7 +38,10 @@ def Execute(Toolchain=True, testingdatafilename=None, E_threshold=None, modelfil
     testingfiledata=pd.read_csv(testingfile)
     testingfile.close()
     TestingDataset=testingfiledata[['totalPMTs', 'totalLAPPDs', 'TrueTrackLengthInWater', 'neutrinoE', 'trueKE', 'diffDirAbs', 'TrueTrackLengthInMrd', 'recoDWallR', 'recoDWallZ', 'dirX', 'dirY', 'dirZ', 'vtxX', 'vtxY', 'vtxZ', 'DNNRecoLength']]
-    dfsel_test=TestingDataset.loc[TestingDataset['neutrinoE'] < E_threshold]
+    if Toolchain:
+        E_threshold = Store.GetStoreVariable('Config','BDT_NuE_threshold')
+    #dfsel_test=TestingDataset.loc[TestingDataset['neutrinoE'] < E_threshold]
+    dfsel_test=TestingDataset
     print("check testing sample: ",dfsel_test.head())
     assert(dfsel_test.isnull().any().any()==False)
 
@@ -54,7 +57,8 @@ def Execute(Toolchain=True, testingdatafilename=None, E_threshold=None, modelfil
 
     ########### BDTG ############
     # read model from the disk
-    modelfilename = Store.GetStoreVariable('Config','BDTMuonModelFile')
+    if Toolchain:
+        modelfilename = Store.GetStoreVariable('Config','BDTMuonModelFile')
     loaded_model = pickle.load(open(modelfilename, 'rb'))
     
     #############################
@@ -100,8 +104,9 @@ def Execute(Toolchain=True, testingdatafilename=None, E_threshold=None, modelfil
 #     plt.savefig("deviation_train_test.png")
 
     # write predictions to the old-style csv file, for validation while we migrate
-    outputfilepath = Store.GetStoreVariable('Config','MuonEnergyPredictionsFile')
-    if outputfilepath == 'NA':
+    if Toolchain:
+        predictionsdatafilename = Store.GetStoreVariable('Config','MuonEnergyPredictionsFile')
+    if predictionsdatafilename == 'NA':
         return 1  # if not saving to legacy file, just return
     # build a pandas DataFrame from the predicted result
     df1 = pd.DataFrame(labels,columns=['MuonEnergy'])
@@ -113,7 +118,7 @@ def Execute(Toolchain=True, testingdatafilename=None, E_threshold=None, modelfil
 
 if __name__ == "__main__":
     # Make the script runnable as a standalone python script too?
-    testingdatafilename = '../LocalFolder/vars_Ereco_test_05202019.csv'
+    testingdatafilename = '../LocalFolder/BDT_testing_input.csv'
     predictionsdatafilename = '../LocalFolder/E_Mu_reco_results.csv'
     modelfilename = '../LocalFolder/finalized_BDTmodel_forMuonEnergy.sav'
     E_threshold=2.

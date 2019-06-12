@@ -68,10 +68,6 @@ def Execute():
     vtxZ = Store.GetStoreVariable('EnergyReco','vtxZ')
     DNNRecoLength = Store.GetStoreVariable('EnergyReco','DNNRecoLength')
     
-    # XXX I don't think we can apply this here...
-    #if trueKE<E_threshold:
-    #    return 1
-    
     # Normalize them
     # --------------
     DNNRecoLength =/ 600.

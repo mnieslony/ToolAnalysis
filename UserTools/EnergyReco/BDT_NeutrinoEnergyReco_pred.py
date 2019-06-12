@@ -68,10 +68,6 @@ def Execute():
     vtxZ = Store.GetStoreVariable('EnergyReco','vtxZ')
     DNNRecoLength = Store.GetStoreVariable('EnergyReco','DNNRecoLength')
     
-    # XXX I don't think we can apply this here...
-    #if trueKE<E_threshold:
-    #    return 1
-    
     # Normalize them
     # --------------
     DNNRecoLength =/ 600.
@@ -88,7 +84,7 @@ def Execute():
     # build numpy arrays of features and labels
     # -----------------------------------------
     features = np.array([DNNRecoLength,TrueTrackLengthInMrd,diffDirAbs,recoDWallR,recoDWallZ,num_lappd_hits,num_pmt_hits,vtxX,vtxY,vtxZ])
-    labels = 1000.*np.array([NeutrinoEnergy])
+    labels = np.array([NeutrinoEnergy])
 
     ########### BDTG ############
     # read model from the disk
