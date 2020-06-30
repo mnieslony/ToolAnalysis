@@ -1,0 +1,11 @@
+# PID config file
+
+PDFFile_muon pdf_muon_x50_y50_z10_Parametric_complete.root
+PDFFile_electron pdf_electron_x50_y50_z10_Parametric_complete.root
+OutputFile likelihood_pid_Parametric_x50_y50_z10_muon_1.root
+OutputFileText efficiencies_x50_y50_z10_simulation_muon_1.txt
+UseParametric 1
+IsSimulation 1
+DrawDebug 0
+
+verbosity 2

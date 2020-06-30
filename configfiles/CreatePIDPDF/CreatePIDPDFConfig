@@ -1,0 +1,10 @@
+# Dummy config file
+
+UseParametric 1
+OutputFile_PDF /annie/app/users/mnieslon/ToolAnalysis_01-04-2019/ToolAnalysis/pdf_electron_Parametric_125.root
+OutputFile_CSV None
+OutputFile_CSVAverage /annie/app/users/mnieslon/ToolAnalysis_01-04-2019/ToolAnalysis/pdf_electron_Parametric_InnerCut_hQ_125.csv
+OutputFile_CSVData /annie/app/users/mnieslon/ToolAnalysis_01-04-2019/ToolAnalysis/pdf_electron_Parametric_InnerCut_Data_hQ_125.csv
+OutputFile_ROOT /annie/app/users/mnieslon/ToolAnalysis_01-04-2019/ToolAnalysis/pdf_electron_BinHistograms_Parametric_125.root
+OutputFile_ROOTOverview /annie/app/users/mnieslon/ToolAnalysis_01-04-2019/ToolAnalysis/pdf_electron_OverviewPlots_125.root
+verbosity 1

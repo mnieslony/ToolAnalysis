@@ -1,0 +1,8 @@
+# ParticleIDPDF config file
+
+verbosity 4
+
+OutputFilePDF beam_muon_FV_PMTVol_SingleRing_ProjMRDHit_DigitThr10_4996
+UseMCTruth 0
+DrawOverviewPlots 1
+

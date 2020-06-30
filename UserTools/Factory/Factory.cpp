@@ -116,5 +116,10 @@ if (tool=="ClusterClassifiers") ret=new ClusterClassifiers;
 if (tool=="MRDLoopbackAnalysis") ret=new MRDLoopbackAnalysis;
 if (tool=="VetoEfficiency") ret=new VetoEfficiency;
 
+if (tool=="PID") ret=new PID;
+if (tool=="SelectMuonSample") ret=new SelectMuonSample;
+if (tool=="CreatePIDPDF") ret=new CreatePIDPDF;
+if (tool=="ParticleIDPDF") ret=new ParticleIDPDF;
+if (tool=="PlotMCProperties") ret=new PlotMCProperties;
 return ret;
 }

@@ -1,0 +1,4 @@
+# PlotMCProperties config file
+
+verbose 1
+OutFile mcproperties_electron_zdir_edge.root

@@ -1,0 +1,7 @@
+myLoadWCSim LoadWCSim configfiles/PID/LoadWCSimConfig
+myLoadWCSimLAPPD LoadWCSimLAPPD configfiles/PID/LoadWCSimLAPPDConfig
+#myPrintANNIEEvent PrintANNIEEvent ./configfiles/PID/PrintANNIEEventConfig
+#myHitTimeResiduals HitResiduals ./configfiles/PID/HitResidualsConfig
+#myPlotLAPPDTimesFromStore PlotLAPPDTimesFromStore ./configfiles/PID/PlotLAPPDTimesFromStoreConfig
+#myCheckDetectorCounts CheckDetectorCounts ./configfiles/PID/CheckDetectorCountsConfig
+myPID PID configfiles/PID/PIDConfig

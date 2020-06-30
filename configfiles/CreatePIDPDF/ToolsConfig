@@ -1,0 +1,4 @@
+myLoadWCSim LoadWCSim configfiles/CreatePIDPDF/LoadWCSimConfig
+myLoadWCSimLAPPD LoadWCSimLAPPD configfiles/CreatePIDPDF/LoadWCSimLAPPDConfig
+#myPrintANNIEEvent PrintANNIEEvent configfiles/CreatePIDPDF/PrintANNIEEventConfig
+myCreatePIDPDF CreatePIDPDF configfiles/CreatePIDPDF/CreatePIDPDFConfig

@@ -1,0 +1,9 @@
+#LoadWCSimLAPPD Config File
+# all variables retrieved with m_variables.Get() must be defined here!
+
+verbose 1
+InputFile /pnfs/annie/persistent/users/mnieslon/wcsim/output/tankonly_combined/wcsim_electrons_lappd_125.root
+WCSimVersion 3               ## should reflect the WCSim version of the files being loaded
+InnerStructureRadius 1.3545
+#HistoricTriggeroffset 950
+DrawDebugGraphs 0 # whether to draw TPolyMarker3D's of hits
