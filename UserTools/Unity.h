@@ -45,7 +45,7 @@
 #include "LoadANNIEEvent.h"
 #include "PhaseITreeMaker.h"
 #include "MrdPaddlePlot.h"
-#include "LoadWCSimLAPPD.h"
+//#include "LoadWCSimLAPPD.h"
 #include "LAPPDTree.h"
 #include "WCSimDemo.h"
 #include "DigitBuilder.h"

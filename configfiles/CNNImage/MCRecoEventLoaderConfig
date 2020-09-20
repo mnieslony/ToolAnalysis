@@ -9,8 +9,8 @@ GetNRings 1
 ParticleSelection 1
 
 #ParticleID 13		#muon
-#ParticleID -11		#positron
-ParticleID 22		#gamma
+ParticleID 11		#electron
+#ParticleID 22		#gamma
 #coordinate shifts needed to put particles in tank origin coordinates
 xshift 0.0
 yshift 14.46469

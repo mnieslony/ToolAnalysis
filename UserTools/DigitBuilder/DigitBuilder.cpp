@@ -100,11 +100,6 @@ bool DigitBuilder::Execute(){
 	  	Log("DigitBuilder Tool: Error retrieving MCHits from ANNIEEvent!",v_error,verbosity); 
 	  	return false; 
 	  }
-	  auto get_mclappdhits = m_data->Stores.at("ANNIEEvent")->Get("MCLAPPDHits",fMCLAPPDHits);
-	  if(!get_mclappdhits){
-	  	Log("DigitBuilder Tool: Error retrieving MCLAPPDHits from ANNIEEvent!",v_error,verbosity); 
-	  	return false;
-	  }
     } else {
       Log("DigitBuilder Tool: ERROR; Currently no non-MC hits boost store!",v_error,verbosity);
       return false;
@@ -254,75 +249,6 @@ bool DigitBuilder::BuildMCPMTRecoDigit() {
 }
 
 bool DigitBuilder::BuildMCLAPPDRecoDigit() {
-	std::string name = "DigitBuilder::BuildMCLAPPDRecoDigit(): ";
-	Log(name + " Build LAPPD reconstructed digits",v_message,verbosity);
-	int region = -999;
-	double calT = 0;
-	double calQ = 0;
-	int digitType = -999;
-	Detector* det=nullptr;
-	Position  pos_sim, pos_reco;
-  // repeat for LAPPD hits
-	// MCLAPPDHits is a std::map<unsigned long,std::vector<LAPPDHit>>
-	if(fMCLAPPDHits){
-		Log("DigitBuilder Tool: Num LAPPD Digits = "+to_string(fMCLAPPDHits->size()),v_message,verbosity);
-		// iterate over the map of sensors with a measurement
-		for(std::pair<unsigned long,std::vector<MCLAPPDHit>>&& apair : *fMCLAPPDHits){
-			unsigned long chankey = apair.first;
-			det = fGeometry->ChannelToDetector(chankey);
-			if(det==nullptr){
-				Log("DigitBuilder Tool: LAPPD Detector not found! ",v_message,verbosity);
-				continue;
-			}
-			int detkey = det->GetDetectorID();
-			int LAPPDId = detectorkey_to_lappdid.at(detkey);
-      //Check if LAPPD is in selected LAPPDs
-      bool isSelectedLAPPD = false;
-      for(int i=0;i<fLAPPDId.size();i++){
-			  if(LAPPDId == fLAPPDId.at(i)) isSelectedLAPPD=true;
-      }
-      if(!isSelectedLAPPD && fLAPPDId.size()>0) continue;
-      if(verbosity>2){
-        std::cout << "Loading in digits for LAPPDID " << LAPPDId << std::endl;
-      }
-
-			if(det->GetDetectorElement()=="LAPPD"){ // redundant, MCLAPPDHits are LAPPD hitss
-				std::vector<MCLAPPDHit>& hits = apair.second;
-				for(MCLAPPDHit& ahit : hits){
-					//if(v_message<verbosity) ahit.Print(); // << VERY verbose
-					// an LAPPDHit has adds (global x-y-z) position, (in-tile x-y) local position
-					// and time psecs
-					// convert the WCSim coordinates to the ANNIEreco coordinates
-					// convert the unit from m to cm
-					pos_reco.SetX(ahit.GetPosition().at(0)*100.+xshift); //cm
-					pos_reco.SetY(ahit.GetPosition().at(1)*100.+yshift); //cm
-					pos_reco.SetZ(ahit.GetPosition().at(2)*100.+zshift); //cm
-					calT = ahit.GetTime();  // 
-					calT = frand.Gaus(calT, 0.1); // time is smeared with 100 ps time resolution. Harded-coded for now.
-					calQ = ahit.GetCharge();
-          if (verbosity>4) { 
-            std::cout << "LAPPD position (X<Y<Z): " << 
-                    to_string(pos_reco.X()) << "," << to_string(pos_reco.Y()) <<
-                    "," << to_string(pos_reco.Z()) << std::endl;
-            std::cout << "LAPPD Charge,Time: " << to_string(calQ) << "," <<
-                    to_string(calT) << std::endl;
-          }
-					// I found the charge is 0 for all the hits. In order to test the code, 
-					// here I just set the charge to 1. We should come back to this later. (Jingbo Wang)
-					calQ = 1.;
-					digitType = RecoDigit::lappd_v0;
-					RecoDigit recoDigit(region, pos_reco, calT, calQ, digitType,LAPPDId);
-					//if(v_message<verbosity) recoDigit.Print();
-				  //make some cuts here. It will be moved to the Hitcleaning tool
-				  if(calT>40 || calT<-10) continue; // cut off delayed hits
-				  fDigitList->push_back(recoDigit);
-				}
-			}
-		} // end loop over MCLAPPDHits
-	} else {
-		cout<<"No MCLAPPDHits"<<endl;
-		return false;
-	}
 	return true;
 }
 

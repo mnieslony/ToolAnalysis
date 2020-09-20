@@ -46,7 +46,6 @@ class CNNImage: public Tool {
   std::string save_mode;  //How is the PMT information supposed to be written out? Geometric/PMT-wise
   int dimensionX;        //dimension of the CNN image in x-direction
   int dimensionY;        //dimension of the CNN image in y-direction
-  int dimensionLAPPD;    //dimension of LAPPD CNN images (both directions, square)
   bool includeTopBottom;
   int verbosity;
   //ANNIEEvent variables
@@ -56,10 +55,7 @@ class CNNImage: public Tool {
   TimeClass* EventTime=nullptr;
   std::vector<MCParticle>* mcparticles = nullptr;
   std::map<unsigned long, std::vector<MCHit>>* MCHits = nullptr;
-  std::map<unsigned long, std::vector<MCLAPPDHit>>* MCLAPPDHits = nullptr;
   Geometry *geom = nullptr;
-  int mrdeventcounter;
-  std::map<unsigned long, std::vector<MCHit>>* TDCData = nullptr;
 
   // RecoEvent
   int nrings;
@@ -70,14 +66,14 @@ class CNNImage: public Tool {
   double tank_center_x;
   double tank_center_y;
   double tank_center_z;
-  double min_y, max_y, min_y_lappd, max_y_lappd;
+  double min_z, max_z;
   int n_tank_pmts;
   double size_top_drawing = 0.1;
-  std::vector<double> vec_pmt2D_x, vec_pmt2D_x_Top, vec_pmt2D_y_Top, vec_pmt2D_x_Bottom, vec_pmt2D_y_Bottom, vec_pmt2D_y, vec_lappd2D_x, vec_lappd2D_y;
-  int npmtsX, npmtsY, nlappdX, nlappdY;
+  std::vector<double> vec_pmt2D_x, vec_pmt2D_x_Top, vec_pmt2D_y_Top, vec_pmt2D_x_Bottom, vec_pmt2D_y_Bottom, vec_pmt2D_y;
+  int npmtsX, npmtsY;
 
   //I/O variables
-  ofstream outfile, outfile_time, outfile_lappd, outfile_lappd_time, outfile_Rings, outfile_MRD;
+  ofstream outfile, outfile_time, outfile_Rings;
   TFile *file = nullptr;
 
   //mctruth information
@@ -87,18 +83,18 @@ class CNNImage: public Tool {
   //PMT information
   std::map<int, double> x_pmt, y_pmt, z_pmt, x_lappd, y_lappd, z_lappd;
   std::map<unsigned long,double> charge, time, total_charge_lappd;
-  std::map<unsigned long, std::vector<std::vector<double>>> charge_lappd, time_lappd;
-  std::map<unsigned long, std::vector<std::vector<int>>> hits_lappd;
-  double maximum_pmts, maximum_lappds;
-  double total_charge_pmts, total_charge_lappds;
-  int total_hits_pmts, total_hits_lappds;
-  double min_time_pmts, max_time_pmts, min_time_lappds, max_time_lappds;
+  double maximum_pmts;
+  double total_charge_pmts;
+  int total_hits_pmts;
+  double min_time_pmts, max_time_pmts;
 
   //detectorkey layout organization
   std::map<unsigned long, int> channelkey_to_pmtid;
   std::map<int,unsigned long> pmt_tubeid_to_channelkey;
-  std::vector<unsigned long> pmt_detkeys, lappd_detkeys, pmt_chankeys;
+  std::vector<unsigned long> pmt_detkeys, pmt_chankeys;
   std::vector<unsigned long> hitpmt_detkeys;
+
+  std::vector<double> phi_positions;
 
 };
 

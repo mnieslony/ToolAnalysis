@@ -33,12 +33,6 @@ public :
    WCSimRootEvent     *wcsimrootevent=nullptr;
    UInt_t             fUniqueID;
    UInt_t             fBits;
-   WCSimRootEvent     *wcsimrootevent_mrd=nullptr;
-   UInt_t             mrd_fUniqueID;
-   UInt_t             mrd_fBits;
-   WCSimRootEvent     *wcsimrootevent_facc=nullptr;
-   UInt_t             facc_fUniqueID;
-   UInt_t             facc_fBits;
    WCSimRootGeom      *wcsimrootgeom=nullptr;
    WCSimRootOptions   *wcsimrootopts=nullptr;
    
@@ -47,14 +41,8 @@ public :
 
    // List of branches
    TBranch        *b_wcsimrootevent;                  //!
-   TBranch        *b_wcsimrootevent_mrd;              //!
-   TBranch        *b_wcsimrootevent_facc;             //!
    TBranch        *b_wcsimrootevent_fUniqueID;        //!
    TBranch        *b_wcsimrootevent_fBits;            //!
-   TBranch        *b_wcsimrootevent_mrd_fUniqueID;    //!
-   TBranch        *b_wcsimrootevent_mrd_fBits;        //!
-   TBranch        *b_wcsimrootevent_facc_fUniqueID;   //!
-   TBranch        *b_wcsimrootevent_facc_fBits;       //!
    TBranch        *b_wcsimrootgeom;                   //!
    TBranch        *b_wcsimrootopts;                   //!
 
@@ -177,10 +165,6 @@ void wcsimT::Init(TTree *tree, TTree* geotree=0, TTree* optstree=0)
    int branchok=0;
    branchok = fChain->SetBranchAddress("wcsimrootevent",&wcsimrootevent, &b_wcsimrootevent);
    if(branchok<0) cerr<<"Failed to set branch address for wcsimrootevent"<<endl;
-   branchok = fChain->SetBranchAddress("wcsimrootevent_mrd",&wcsimrootevent_mrd, &b_wcsimrootevent_mrd);
-   if(branchok<0) cerr<<"Failed to set branch address for wcsimrootevent_mrd"<<endl;
-   branchok = fChain->SetBranchAddress("wcsimrootevent_facc",&wcsimrootevent_facc, &b_wcsimrootevent_facc);
-   if(branchok<0) cerr<<"Failed to set branch address for wcsimrootevent_facc"<<endl;
    // XXX need to figure out how to uniquely identify fUniqueID and fBits branches to do this  XXX
 //   branchok = fChain->SetBranchAddress("fUniqueID", &fUniqueID, &b_wcsimrootevent_fUniqueID);
 //   if(branchok<0) cerr<<"Failed to set branch address for fUniqueID"<<endl;
