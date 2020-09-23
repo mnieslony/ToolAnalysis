@@ -321,12 +321,15 @@ bool LoadWCSim::Execute(){
 					*/
 
 					tracktype startstoptype = tracktype::UNDEFINED;
-					//std::cout <<"flag (track): "<<nextrack->GetFlag()<<", PDG: "<<nextrack->GetIpnu()<<std::endl;
+					if (nextrack->GetFlag()==-1){
+					  std::cout <<"flag (track): "<<nextrack->GetFlag()<<", PDG: "<<nextrack->GetIpnu()<<", energy: "<<nextrack->GetE()<<", stop energy: "<<nextrack->GetEndE()<<std::endl;
+					}
 					//MC particle times are relative to the trigger time
-					if(nextrack->GetFlag()==-1) {m_data->CStore.Set("NeutrinoEnergy",nextrack->GetE());}
+                                        int ipnu = nextrack->GetIpnu();
+					if(nextrack->GetFlag()==-1 && (fabs(ipnu) == 12 || fabs(ipnu) == 14 || fabs(ipnu) == 16)) {m_data->CStore.Set("NeutrinoEnergy",nextrack->GetE());}
 					//cout << "Neutrino Energy LoadWCSim: " << nextrack->GetE() << ", " << nextrack->GetEndE() << endl;}
-					std::cout <<"loadwcsim: flag: "<<nextrack->GetFlag()<<std::endl;
-					if(nextrack->GetFlag()!=-1 && nextrack->GetFlag()!=0) continue; // flag 0 only is normal particles: excludes neutrino
+					//std::cout <<"loadwcsim: flag: "<<nextrack->GetFlag()<<std::endl;
+					if(nextrack->GetFlag()!=-1 ) continue; // flag 0 only is normal particles: excludes neutrino
 					MCParticle thisparticle(
 						nextrack->GetIpnu(), nextrack->GetE(), nextrack->GetEndE(),
 						Position(nextrack->GetStart(0) / 100.,

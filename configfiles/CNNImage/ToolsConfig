@@ -3,4 +3,5 @@ myLoadWCSim LoadWCSim configfiles/CNNImage/LoadWCSimConfig
 myLoadEventloader MCRecoEventLoader configfiles/CNNImage/MCRecoEventLoaderConfig
 myDigitBuilder DigitBuilder configfiles/CNNImage/DigitBuilderConfig
 myEventSelector EventSelector configfiles/CNNImage/EventSelectorConfig
+myEnergyExtractor EnergyExtractor configfiles/CNNImage/EnergyExtractorConfig
 myCNNImage CNNImage configfiles/CNNImage/CNNImageConfig
