@@ -17,8 +17,10 @@ bool MCRecoEventLoader::Initialise(std::string configfile, DataModel &data){
   fGetNRings = 1;
   fParticleID = 13;
   xshift = 0.;
-  yshift = 14.46469;
-  zshift = -168.1;
+  yshift = 0.;
+  zshift = 0.;
+  //yshift = 14.46469; 	//yshift for ANNIE
+  //shift = -168.1;	//zshift for ANNIE
 
   /// Get the Tool configuration variables
   m_variables.Get("verbosity",verbosity);
@@ -49,12 +51,12 @@ bool MCRecoEventLoader::Execute(){
   /// Reset everything
   this->Reset();
 
-	// see if "ANNIEEvent" exists
-	auto get_annieevent = m_data->Stores.count("ANNIEEvent");
-	if(!get_annieevent){
-		Log("DigitBuilder Tool: No ANNIEEvent store!",v_error,verbosity); 
-		return false;
-	};
+  // see if "ANNIEEvent" exists
+  auto get_annieevent = m_data->Stores.count("ANNIEEvent");
+  if(!get_annieevent){
+    Log("DigitBuilder Tool: No ANNIEEvent store!",v_error,verbosity); 
+    return false;
+  };
 
   // Load MC Particles information for this event
   auto get_mcparticles = m_data->Stores.at("ANNIEEvent")->Get("MCParticles",
@@ -112,6 +114,7 @@ void MCRecoEventLoader::FindTrueVertexFromMC() {
     for(unsigned int particlei=0; particlei<fMCParticles->size(); particlei++){
       MCParticle aparticle = fMCParticles->at(particlei);
       //if(v_debug<verbosity) aparticle.Print();       // print if we're being *really* verbose
+      std::cout <<"aparticle:ParentPDG: "<<aparticle.GetParentPdg()<<std::endl;
       if(aparticle.GetParentPdg()!=0) continue;      // not a primary particle
       if(aparticle.GetPdgCode()!=fParticleID) continue;       // not a muon
       primarymuon = aparticle;                       // note the particle

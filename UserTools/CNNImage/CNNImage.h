@@ -44,8 +44,8 @@ class CNNImage: public Tool {
   std::string detector_config;
   std::string data_mode;  //Charge, Time
   std::string save_mode;  //How is the PMT information supposed to be written out? Geometric/PMT-wise
-  int dimensionX;        //dimension of the CNN image in x-direction
-  int dimensionY;        //dimension of the CNN image in y-direction
+  int dimensionX;        //dimension of the CNN image in x-direction (Geometric mode)
+  int dimensionY;        //dimension of the CNN image in y-direction (Geometric mode)
   bool includeTopBottom;
   int verbosity;
   //ANNIEEvent variables
@@ -55,6 +55,9 @@ class CNNImage: public Tool {
   TimeClass* EventTime=nullptr;
   std::vector<MCParticle>* mcparticles = nullptr;
   std::map<unsigned long, std::vector<MCHit>>* MCHits = nullptr;
+  std::vector<TriggerClass>* TriggerData = nullptr;
+  uint16_t MCTriggernum=0;
+  TimeClass TriggerTime;
   Geometry *geom = nullptr;
 
   // RecoEvent
@@ -71,22 +74,26 @@ class CNNImage: public Tool {
   double size_top_drawing = 0.1;
   std::vector<double> vec_pmt2D_x, vec_pmt2D_x_Top, vec_pmt2D_y_Top, vec_pmt2D_x_Bottom, vec_pmt2D_y_Bottom, vec_pmt2D_y;
   int npmtsX, npmtsY;
+  std::vector<double> phi_positions;
 
   //I/O variables
-  ofstream outfile, outfile_time, outfile_Rings;
+  ofstream outfile, outfile_time, outfile_firsttime, outfile_Rings;
+  ofstream outfile_abs, outfile_abs_time, outfile_abs_firsttime;
   TFile *file = nullptr;
-
-  //mctruth information
-  Position truevtx;
-  double truevtx_x, truevtx_y, truevtx_z;
+  TH1F *h_trigger_neutron = nullptr;
+  TH1F *h_charge_prompt = nullptr;
+  TH1F *h_charge_delayed = nullptr;
+  TH1F *h_time_total = nullptr;
+  TH1F *h_ly_prompt = nullptr;
 
   //PMT information
-  std::map<int, double> x_pmt, y_pmt, z_pmt, x_lappd, y_lappd, z_lappd;
-  std::map<unsigned long,double> charge, time, total_charge_lappd;
+  std::map<int, double> x_pmt, y_pmt, z_pmt;
+  std::map<unsigned long,double> charge, time, first_time;
   double maximum_pmts;
   double total_charge_pmts;
   int total_hits_pmts;
   double min_time_pmts, max_time_pmts;
+  double max_firsttime_pmts, min_firsttime_pmts;
 
   //detectorkey layout organization
   std::map<unsigned long, int> channelkey_to_pmtid;
@@ -94,7 +101,13 @@ class CNNImage: public Tool {
   std::vector<unsigned long> pmt_detkeys, pmt_chankeys;
   std::vector<unsigned long> hitpmt_detkeys;
 
-  std::vector<double> phi_positions;
+  //Verbosity levels
+  int v_error = 0;
+  int v_warning = 1;
+  int v_message = 2;
+  int v_debug = 3;
+  int vv_debug = 4;
+
 
 };
 

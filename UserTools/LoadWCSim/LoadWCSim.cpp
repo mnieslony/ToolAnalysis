@@ -264,6 +264,8 @@ bool LoadWCSim::Execute(){
 
 	triggers_event = WCSimEntry->wcsimrootevent->GetNumberOfEvents();
 
+	std::cout <<"Number of events: "<<triggers_event<<", MCTriggernum: "<<MCTriggernum<<std::endl;
+
 	//for(int MCTriggernum=0; MCTriggernum<WCSimEntry->wcsimrootevent->GetNumberOfEvents(); MCTriggernum++){
 		if(verbosity>1) cout<<"getting triggers"<<endl;
 		// cherenkovhit(times) are all in first trig
@@ -319,10 +321,12 @@ bool LoadWCSim::Execute(){
 					*/
 
 					tracktype startstoptype = tracktype::UNDEFINED;
+					//std::cout <<"flag (track): "<<nextrack->GetFlag()<<", PDG: "<<nextrack->GetIpnu()<<std::endl;
 					//MC particle times are relative to the trigger time
-					if(nextrack->GetFlag()==-1) {m_data->CStore.Set("NeutrinoEnergy",nextrack->GetE());
-					cout << "Neutrino Energy LoadWCSim: " << nextrack->GetE() << ", " << nextrack->GetEndE() << endl;}
-					if(nextrack->GetFlag()!=-1) continue; // flag 0 only is normal particles: excludes neutrino
+					if(nextrack->GetFlag()==-1) {m_data->CStore.Set("NeutrinoEnergy",nextrack->GetE());}
+					//cout << "Neutrino Energy LoadWCSim: " << nextrack->GetE() << ", " << nextrack->GetEndE() << endl;}
+					std::cout <<"loadwcsim: flag: "<<nextrack->GetFlag()<<std::endl;
+					if(nextrack->GetFlag()!=-1 && nextrack->GetFlag()!=0) continue; // flag 0 only is normal particles: excludes neutrino
 					MCParticle thisparticle(
 						nextrack->GetIpnu(), nextrack->GetE(), nextrack->GetEndE(),
 						Position(nextrack->GetStart(0) / 100.,
@@ -425,19 +429,19 @@ bool LoadWCSim::Execute(){
 		int numtankdigits = atrigt ? atrigt->GetCherenkovDigiHits()->GetEntries() : 0;
 		if(verbosity>1) cout<<"looping over "<<numtankdigits<<" tank digits"<<endl;
 		for(int digiti=0; digiti<numtankdigits; digiti++){
-			if(verbosity>2) cout<<"getting digit "<<digiti<<endl;
+			//if(verbosity>2) cout<<"getting digit "<<digiti<<endl;
 			WCSimRootCherenkovDigiHit* digihit =
 				(WCSimRootCherenkovDigiHit*)atrigt->GetCherenkovDigiHits()->At(digiti);
 			//WCSimRootChernkovDigiHit has methods GetTubeId(), GetT(), GetQ(), GetPhotonIds()
-			if(verbosity>2) cout<<"next digihit at "<<digihit<<endl;
+			//if(verbosity>2) cout<<"next digihit at "<<digihit<<endl;
 			int tubeid = digihit->GetTubeId();  // geometry TubeID->channelkey map is made INCLUDING offset of 1
-			if(verbosity>2) cout<<"tubeid="<<tubeid<<endl;
+			//if(verbosity>2) cout<<"tubeid="<<tubeid<<endl;
 			if(pmt_tubeid_to_channelkey.count(tubeid)==0){
 				cerr<<"LoadWCSim ERROR: tank PMT with no associated ChannelKey!"<<endl;
 				return false;
 			}
 			unsigned long key = pmt_tubeid_to_channelkey.at(tubeid);
-			if(verbosity>2) cout<<"ChannelKey="<<key<<endl;
+			//if(verbosity>2) cout<<"ChannelKey="<<key<<endl;
 			double digittime;
 			if(use_smeared_digit_time){
 				digittime = static_cast<double>(digihit->GetT()-HistoricTriggeroffset); // relative to trigger
@@ -457,21 +461,20 @@ bool LoadWCSim::Execute(){
 				}
 				digittime = earliestphotontruetime;
 			}
-			if(verbosity>2){ cout<<"digittime is "<<digittime<<" [ns] from Trigger"<<endl; }
+			//if(verbosity>2){ cout<<"digittime is "<<digittime<<" [ns] from Trigger"<<endl; }
 			float digiq = digihit->GetQ();
-			if(verbosity>2) cout<<"digit Q is "<<digiq<<endl;
+			//if(verbosity>2) cout<<"digit Q is "<<digiq<<endl;
 			// Get hit parent information
 			std::vector<int> parents = GetHitParentIds(digihit, firsttrigt);
 
 			MCHit nexthit(key, digittime, digiq, parents);
 			if(MCHits->count(key)==0) MCHits->emplace(key, std::vector<MCHit>{nexthit});
 			else MCHits->at(key).push_back(nexthit);
-			if(verbosity>2) cout<<"digit added"<<endl;
+			//if(verbosity>2) cout<<"digit added"<<endl;
 		}
 		if(verbosity>2) cout<<"done with tank digits"<<endl;
 
 		if(verbosity>2) cout<<"setting triggerdata time to "<<EventTimeNs<<"ns"<<endl;
-		TriggerData->front().SetTime(EventTimeNs);
 
 		// copy over additional information about tracks and which tank/mrd/veto PMTs they hit
 		if(MCTriggernum==0){
@@ -713,14 +716,14 @@ Geometry* LoadWCSim::ConstructToolChainGeometry(){
 							channelstatus::ON);
 
 		// Add this channel to the geometry
-		if(verbosity>4) cout<<"Adding channel "<<uniquechannelkey<<" to detector "<<uniquedetectorkey<<endl;
+		//if(verbosity>4) cout<<"Adding channel "<<uniquechannelkey<<" to detector "<<uniquedetectorkey<<endl;
 		adet.AddChannel(pmtchannel);
 
 		// Add this detector to the geometry
-		if(verbosity>4) cout<<"Adding detector "<<uniquedetectorkey<<" to geometry"<<endl;
+		//if(verbosity>4) cout<<"Adding detector "<<uniquedetectorkey<<" to geometry"<<endl;
 		anniegeom->AddDetector(adet);
-		if(verbosity>4) cout<<"printing geometry"<<endl;
-		if(verbosity>4) anniegeom->PrintChannels();
+		//if(verbosity>4) cout<<"printing geometry"<<endl;
+		//if(verbosity>4) anniegeom->PrintChannels();
 	}
 
 

@@ -465,6 +465,7 @@ bool EventSelector::DSNBCheck() {
   m_data->Stores.at("RecoEvent")->Get("NeutronCount",neutron_count);
   m_data->Stores.at("RecoEvent")->Get("GammaCount",gamma_count);
   m_data->Stores.at("RecoEvent")->Get("PositronCount",positron_count);
+  std::cout <<"neutron count: "<<neutron_count<<", gamma count: "<<gamma_count<<", positron count: "<<positron_count<<std::endl;
   if (neutron_count == 1 && (gamma_count >= 1 || positron_count >=1)) is_dsnb_like = true;
   return is_dsnb_like;
 
