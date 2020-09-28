@@ -5,5 +5,5 @@ DataMode Normal			#options: Charge/Time
 SaveMode PMT-wise		#options: Geometric / PMT-wise
 DimensionX 151			#choose something suitable (32/64/...)
 DimensionY 101			#choose something suitable (32/64/...)
-OutputFile dsnb_SK_stacking
+OutputFile electron_10MeV_SK_uniform_nodark
 IncludeTopBottom 1

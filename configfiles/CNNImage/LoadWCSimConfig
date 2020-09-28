@@ -2,7 +2,7 @@
 # all variables retrieved with m_variables.Get() must be defined here!
 verbose 2
 
-InputFile /annie/app/users/mnieslon/WCSim_build_SK/wcsim_dsnb_SK_Madau2014_T5MeV_200_StackingOnly.root
+InputFile /annie/app/users/mnieslon/WCSim_build_SK/wcsim_e_10MeV_SK_uniform_nodark.root
 #InputFile /pnfs/annie/persistent/users/moflaher/wcsim/multipmt/tankonly/wcsim_25_04_19_ANNIEp2v6_nodigit_BNB_Water_10k_22-05-17/wcsim_0.1.9.root
 #InputFile /pnfs/annie/persistent/users/moflaher/wcsim/multipmt/tankonly/wcsim_25_04_19_ANNIEp2v6_nodigit_BNB_Water_10k_22-05-17/wcsim_0.1.9.root
 
@@ -12,3 +12,5 @@ UseDigitSmearedTime 1        ## whether to use smeared digit time (T), or true t
 LappdNumStrips 56            ## num channels to construct from each LAPPD
 LappdStripLength 100         ## relative x position of each LAPPD strip, for dual-sided readout [mm]
 LappdStripSeparation 10      ## stripline separation, for calculating relative y position of each LAPPD strip [mm]
+
+AllowZeroFlag 1		     ## Particles with flag=0 should be loaded?

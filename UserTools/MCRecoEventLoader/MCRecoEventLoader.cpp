@@ -114,7 +114,7 @@ void MCRecoEventLoader::FindTrueVertexFromMC() {
     for(unsigned int particlei=0; particlei<fMCParticles->size(); particlei++){
       MCParticle aparticle = fMCParticles->at(particlei);
       //if(v_debug<verbosity) aparticle.Print();       // print if we're being *really* verbose
-      std::cout <<"aparticle:ParentPDG: "<<aparticle.GetParentPdg()<<std::endl;
+      //std::cout <<"aparticle:ParentPDG: "<<aparticle.GetParentPdg()<<std::endl;
       if(aparticle.GetParentPdg()!=0) continue;      // not a primary particle
       if(aparticle.GetPdgCode()!=fParticleID) continue;       // not a muon
       primarymuon = aparticle;                       // note the particle

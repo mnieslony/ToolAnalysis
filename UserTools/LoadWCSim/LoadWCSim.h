@@ -63,7 +63,8 @@ class LoadWCSim: public Tool {
 	int LappdNumStrips;           // number of Channels per LAPPD
 	double LappdStripLength;      // [mm] for calculating relative x position for dual-ended readout
 	double LappdStripSeparation;  // [mm] for calculating relative y position of each stripline
-	
+	bool AllowZeroFlag;	      // allow particles with flag 0 to be loaded?	
+
 	// WCSim variables
 	//////////////////
 	//TFile* file;

@@ -1,10 +1,10 @@
 # Energy Extractor config file
 
-OutputFile dsnb_test_0
+OutputFile electron_10MeV_SK_uniform_nodark
 Verbosity 1
 SaveNeutrino 1
 SaveElectron 1
-SaveGamma 0
+SaveGamma 1
 SaveMuon 0
 SavePion 0
 SaveKaon 0

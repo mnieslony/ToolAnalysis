@@ -58,6 +58,11 @@ bool LoadWCSim::Initialise(std::string configfile, DataModel &data){
 		Log("LoadWCSim Tool: Assuming RunStartDate of 0ns, i.e. unix epoch",v_warning,verbosity);
 		RunStartUser = 0;
 	}
+	get_ok = m_variables.Get("AllowZeroFlag", AllowZeroFlag);
+	if(not get_ok){
+		Log("LoadWCSim Tool: Assuming zero flags are not allowed",v_warning,verbosity);
+		AllowZeroFlag = 0;
+	}
 	// put version in the CStore for downstream tools
 	m_data->CStore.Set("WCSimVersion", WCSimVersion);
 
@@ -321,15 +326,17 @@ bool LoadWCSim::Execute(){
 					*/
 
 					tracktype startstoptype = tracktype::UNDEFINED;
-					if (nextrack->GetFlag()==-1){
+					if (nextrack->GetParenttype()==0){
 					  std::cout <<"flag (track): "<<nextrack->GetFlag()<<", PDG: "<<nextrack->GetIpnu()<<", energy: "<<nextrack->GetE()<<", stop energy: "<<nextrack->GetEndE()<<std::endl;
 					}
+
 					//MC particle times are relative to the trigger time
                                         int ipnu = nextrack->GetIpnu();
-					if(nextrack->GetFlag()==-1 && (fabs(ipnu) == 12 || fabs(ipnu) == 14 || fabs(ipnu) == 16)) {m_data->CStore.Set("NeutrinoEnergy",nextrack->GetE());}
+					if(nextrack->GetParenttype()==0 && (fabs(ipnu) == 12 || fabs(ipnu) == 14 || fabs(ipnu) == 16)) {m_data->CStore.Set("NeutrinoEnergy",nextrack->GetE());}
 					//cout << "Neutrino Energy LoadWCSim: " << nextrack->GetE() << ", " << nextrack->GetEndE() << endl;}
 					//std::cout <<"loadwcsim: flag: "<<nextrack->GetFlag()<<std::endl;
-					if(nextrack->GetFlag()!=-1 ) continue; // flag 0 only is normal particles: excludes neutrino
+					if(!AllowZeroFlag && nextrack->GetFlag()!=-1 ) continue; // flag 0 only is normal particles: excludes neutrino
+					else if (AllowZeroFlag && nextrack->GetFlag()!=-1 && nextrack->GetFlag()!=0) continue;
 					MCParticle thisparticle(
 						nextrack->GetIpnu(), nextrack->GetE(), nextrack->GetEndE(),
 						Position(nextrack->GetStart(0) / 100.,
