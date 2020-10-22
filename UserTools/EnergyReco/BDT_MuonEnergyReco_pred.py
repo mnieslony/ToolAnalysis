@@ -10,6 +10,7 @@ import csv
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import seaborn as sns
 from array import array
 from sklearn import datasets
 from sklearn import metrics
@@ -20,25 +21,27 @@ from sklearn.utils import shuffle
 from sklearn import linear_model, ensemble
 from sklearn.metrics import mean_squared_error
 import pickle
-#import seaborn as sns
-
-#import ROOT
-#ROOT.gROOT.SetBatch(True)
-#from ROOT import TFile, TNtuple
-#from root_numpy import root2array, tree2array, fill_hist
-
-#-------- File with events for reconstruction:
-#--- evts for training:
-infile = "../LocalFolder/vars_Ereco.csv"
-#--- evts for prediction:
-infile2 = "../LocalFolder/vars_Ereco.csv"
-#----------------
 
 def Initialise():
     return 1
 
 def Finalise():
- #   ROOT.gSystem.Exit(0)
+    # make a plot of all the errors
+    # first retrieve all errors from Store
+    Yvec = Store.GetStoreVariable('EnergyReco','MuonEnergyAccuracyVec')
+    # now make the plot
+    nbins=np.arange(-100,100,2)
+    fig,ax0=plt.subplots(ncols=1, sharey=True)#, figsize=(8, 6))
+    cmap = sns.light_palette('b',as_cmap=True)
+    f=ax0.hist(np.array(Y), nbins, histtype='step', fill=True, color='gold',alpha=0.75)
+    ax0.set_xlim(-100.,100.)
+    ax0.set_xlabel('$\Delta E/E$ [%]')
+    ax0.set_ylabel('Number of Entries')
+    ax0.xaxis.set_label_coords(0.95, -0.08)
+    ax0.yaxis.set_label_coords(-0.1, 0.71)
+    title = "mean = %.2f, std = %.2f " % (np.array(Y).mean(), np.array(Y).std())
+    plt.title(title)
+    plt.savefig("Mu_DE_E.png")
     return 1
 
 def Execute():
@@ -46,120 +49,96 @@ def Execute():
     seed = 170
     np.random.seed(seed)
 
-    E_threshold = 2.
-    E_low=0
-    E_high=2000
-    div=100
-    bins = int((E_high-E_low)/div)
-    print('bins: ', bins)
+    # Retrieve features for predicting
+    # --------------------------------
+    print( "--- loading input variables from store!")
+    num_pmt_hits = Store.GetStoreVariable('EnergyReco','num_pmt_hits')
+    num_lappd_hits = Store.GetStoreVariable('EnergyReco','num_lappd_hits')
+    neutrinoE = Store.GetStoreVariable('EnergyReco','neutrinoE')
+    trueKE = Store.GetStoreVariable('EnergyReco','trueKE')
+    diffDirAbs = Store.GetStoreVariable('EnergyReco','diffDirAbs')
+    TrueTrackLengthInMrd = Store.GetStoreVariable('EnergyReco','TrueTrackLengthInMrd')
+    recoDWallR = Store.GetStoreVariable('EnergyReco','recoDWallR')
+    recoDWallZ = Store.GetStoreVariable('EnergyReco','recoDWallZ')
+    dirX = Store.GetStoreVariable('EnergyReco','dirX')
+    dirY = Store.GetStoreVariable('EnergyReco','dirY')
+    dirZ = Store.GetStoreVariable('EnergyReco','dirZ')
+    vtxX = Store.GetStoreVariable('EnergyReco','vtxX')
+    vtxY = Store.GetStoreVariable('EnergyReco','vtxY')
+    vtxZ = Store.GetStoreVariable('EnergyReco','vtxZ')
+    DNNRecoLength = Store.GetStoreVariable('EnergyReco','DNNRecoLength')
+    
+    # Normalize them
+    # --------------
+    DNNRecoLength =/ 600.
+    TrueTrackLengthInMrd=/200.
+    num_lappd_hits =/ 200.
+    num_pmt_hits =/ 200.
+    vtxX =/ 150.
+    vtxY =/ 200.
+    vtxZ =/ 150.
+    #diffDirAbs                    # no scaling
+    #recoDWallR=/tank_radius       # already scaled in FindTrackLengthInWater
+    #recoDWallZ=/2*tank_halfheight # already scaled in FindTrackLengthInWater
 
-    print( "--- opening file with input variables!") 
-    #--- events for training ---
-    filein = open(str(infile))
-    print("evts for training in: ",filein)
-    df00=pd.read_csv(filein)
-    df0=df00[['totalPMTs','totalLAPPDs','TrueTrackLengthInWater','neutrinoE','trueKE','diffDirAbs','TrueTrackLengthInMrd','recoDWallR','recoDWallZ','dirX','dirY','dirZ','vtxX','vtxY','vtxZ','DNNRecoLength']]
-    dfsel=df0.loc[df0['neutrinoE'] < E_threshold]
-
-    #print to check:
-    print("check training sample: ",dfsel.head())
-#    print(dfsel.iloc[5:10,0:5])
-    #check fr NaN values:
-    assert(dfsel.isnull().any().any()==False)
-
-    #--- events for predicting ---
-    filein2 = open(str(infile2))
-    print(filein2)
-    df00b = pd.read_csv(filein2)
-    df0b=df00b[['totalPMTs','totalLAPPDs','TrueTrackLengthInWater','neutrinoE','trueKE','diffDirAbs','TrueTrackLengthInMrd','recoDWallR','recoDWallZ','dirX','dirY','dirZ','vtxX','vtxY','vtxZ','DNNRecoLength']]
-    dfsel_pred=df0b.loc[df0['neutrinoE'] < E_threshold]
-    #print to check:
-    print("check predicting sample: ",dfsel_pred.shape," ",dfsel_pred.head())
-#    print(dfsel_pred.iloc[5:10,0:5])
-    #check fr NaN values:
-    assert(dfsel_pred.isnull().any().any()==False)
-
-    #--- normalisation-training sample:
-    dfsel_n = pd.DataFrame([ dfsel['DNNRecoLength']/600., dfsel['TrueTrackLengthInMrd']/200., dfsel['diffDirAbs'], dfsel['recoDWallR']/152.4, dfsel['recoDWallZ']/198., dfsel['totalLAPPDs']/1000., dfsel['totalPMTs']/1000., dfsel['vtxX']/150., dfsel['vtxY']/200., dfsel['vtxZ']/150. ]).T
-    print("chehck normalisation: ", dfsel_n.head())
-    #--- normalisation-sample for prediction:
-    dfsel_pred_n = pd.DataFrame([ dfsel_pred['DNNRecoLength']/600., dfsel_pred['TrueTrackLengthInMrd']/200., dfsel_pred['diffDirAbs'], dfsel_pred['recoDWallR']/152.4, dfsel_pred['recoDWallZ']/198., dfsel_pred['totalLAPPDs']/1000., dfsel_pred['totalPMTs']/1000., dfsel_pred['vtxX']/150., dfsel_pred['vtxY']/200., dfsel_pred['vtxZ']/150. ]).T
-
-    #--- prepare training & test sample for BDT:
-    arr_hi_E0 = np.array(dfsel_n[['DNNRecoLength','TrueTrackLengthInMrd','diffDirAbs','recoDWallR','recoDWallZ','totalLAPPDs','totalPMTs','vtxX','vtxY','vtxZ']])
-    arr3_hi_E0 = np.array(dfsel[['trueKE']])
- 
-    #---- random split of events ----
-    rnd_indices = np.random.rand(len(arr_hi_E0)) < 0.50
-    #--- select events for training/test:
-    arr_hi_E0B = arr_hi_E0[rnd_indices]
-    arr2_hi_E_n = arr_hi_E0B #.reshape(arr_hi_E0B.shape + (-1,))
-    arr3_hi_E = arr3_hi_E0[rnd_indices]
-    #--- select events for prediction: -- in future we need to replace this with data sample!
-    evts_to_predict = arr_hi_E0[~rnd_indices]
-    evts_to_predict_n = evts_to_predict #.reshape(evts_to_predict.shape + (-1,))
-    test_data_trueKE_hi_E = arr3_hi_E0[~rnd_indices]
-
-    #printing..
-    print('events for training: ',len(arr3_hi_E),' events for predicting: ',len(test_data_trueKE_hi_E)) 
-    print('initial train shape: ',arr3_hi_E.shape," predict: ",test_data_trueKE_hi_E.shape)
+    # build numpy arrays of features and labels
+    # -----------------------------------------
+    features = np.array([DNNRecoLength,TrueTrackLengthInMrd,diffDirAbs,recoDWallR,recoDWallZ,num_lappd_hits,num_pmt_hits,vtxX,vtxY,vtxZ])
+    labels = np.array([trueKE])
 
     ########### BDTG ############
-    n_estimators=1000
-
     # read model from the disk
-    filename = 'finalized_BDTmodel_forMuonEnergy.sav'
-    #pickle.dump(model, open(filename, 'wb'))
- 
-    # load the model from disk
-    loaded_model = pickle.load(open(filename, 'rb'))
-    #result = loaded_model.score(X_test, Y_test)
-    #print(result) 
+    modelfilename = Store.GetStoreVariable('Config','BDTMuonModelFile')
+    loaded_model = pickle.load(open(modelfilename, 'rb'))
+    
+    #############################
 
-    #predicting...
-    print("events for energy reco: ", len(evts_to_predict_n)) 
-    BDTGoutput_E = loaded_model.predict(evts_to_predict_n)
+    # predicting...
+    # -------------
+    BDTGoutput_E = loaded_model.predict(features)
 
-    Y=[0 for j in range (0,len(test_data_trueKE_hi_E))]
-    for i in range(len(test_data_trueKE_hi_E)):
-        Y[i] = 100.*(test_data_trueKE_hi_E[i]-BDTGoutput_E[i])/(1.*test_data_trueKE_hi_E[i])
-#        print("MC Energy: ", test_data_trueKE_hi_E[i]," Reco Energy: ",BDTGoutput_E[i]," DE/E[%]: ",Y[i])
+    # measure accuracy
+    # ----------------
+    Y = 100.*(trueKE-BDTGoutput_E[0])/(1.*trueE)
+#   print("MC Energy: ", labels[0]," Reco Energy: ",BDTGoutput_E[0]," DE/E[%]: ",Y)
 
-    df1 = pd.DataFrame(test_data_trueKE_hi_E,columns=['MuonEnergy'])
+    # Pass to the BoostStore
+    # ----------------------
+    Store.SetStoreVariable('EnergyReco','MuonEnergyReco',BDTGoutput_E)
+    Store.SetStoreVariable('EnergyReco','MuonEnergyAccuracy',Y)
+    # Also keep a list of all previous accuracies for making a plot
+    evtnum = Store.GetStoreVariable('ANNIEEvent','EventNumber')
+    if evtnum==0:
+      YVec = []
+    else:
+      Yvec = Store.GetStoreVariable('EnergyReco','MuonEnergyAccuracyVec')
+    YVec.append(Y)
+    Store.SetStoreVariable('EnergyReco','MuonEnergyAccuracyVec',Yvec)
+
+    #-----------------------------
+    # Backward Compatibility
+    #-----------------------------
+    # append this entry to the old-style csv file, for validation while we migrate
+    outputfilepath = Store.GetStoreVariable('Config','MuonEnergyPredictionsFile')
+    if outputfilepath == 'NA':
+        return 1  # if not saving to legacy file, just return
+    
+    # check if this is the first execute iteration. if so, we'll create a header row first.
+    if evtnum==0:
+        headers=['','MuonEnergy', 'RecoE']
+        # convert to pandas dataframe
+        headersframe = pd.DataFrame(headers)
+        # write the headers to file
+        headersframe.T.to_csv(outputfilepath,header=False,index=False)
+
+    # build a pandas DataFrame from the predicted result
+    df0 = pd.DataFrame([evtnum],columns=[''])
+    df1 = pd.DataFrame(labels,columns=['MuonEnergy'])
     df2 = pd.DataFrame(BDTGoutput_E,columns=['RecoE'])
-    df_final = pd.concat([df1,df2],axis=1)
- 
-    #-logical tests:
-    print("checking..."," df0.shape[0]: ",df1.shape[0]," len(y_predicted): ", len(BDTGoutput_E)) 
-    assert(df1.shape[0]==len(BDTGoutput_E))
-    assert(df_final.shape[0]==df2.shape[0])
-
-    #save results to .csv:  
-    df_final.to_csv("ErecoEmu_results.csv", float_format = '%.3f')
-
-#    nbins=np.arange(-100,100,2)
-#    fig,ax0=plt.subplots(ncols=1, sharey=True)#, figsize=(8, 6))
-#    cmap = sns.light_palette('b',as_cmap=True)
-#    f=ax0.hist(np.array(Y), nbins, histtype='step', fill=True, color='gold',alpha=0.75)
-#    ax0.set_xlim(-100.,100.)
-#    ax0.set_xlabel('$\Delta E/E$ [%]')
-#    ax0.set_ylabel('Number of Entries')
-#    ax0.xaxis.set_label_coords(0.95, -0.08)
-#    ax0.yaxis.set_label_coords(-0.1, 0.71)
-#    title = "mean = %.2f, std = %.2f " % (np.array(Y).mean(), np.array(Y).std())
-#    plt.title(title)
-#    plt.savefig("DE_E.png")
- 
-    #write in output .root file:
-    #vtxX=dfsel_n['vtxX'][~rnd_indices]
-    #vtxY=dfsel_n['vtxY'][~rnd_indices]
-    #vtxZ=dfsel_n['vtxZ'][~rnd_indices]
-    #outputFile = ROOT.TFile.Open("TESTNEWOUTRecoMuonMRD.root", "RECREATE")
-    #outputTuple = ROOT.TNtuple("tuple", "tuple", "trueKE:recoKE:vtxX:vtxY:vtxZ:DE_E")
-    #for i in range(len(test_data_trueKE_hi_E)):
-    #    outputTuple.Fill(test_data_trueKE_hi_E[i],BDTGoutput_E[i],vtxX[i],vtxY[i],vtxZ[i],Y[i])
-    #outputTuple.Write()
-    #outputFile.Close()
+    df_final = pd.concat([df0,df1,df2],axis=1)
+    
+    #save results to .csv:
+    df_final.to_csv(outputfilepath, float_format = '%.3f', mode='a', header=False, index=False)
 
     return 1
 

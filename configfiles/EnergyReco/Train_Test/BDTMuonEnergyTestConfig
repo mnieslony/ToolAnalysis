@@ -1,0 +1,14 @@
+# This config file stores variables that may be retrieved by the python script
+# Access them by retrieving the corresponding variable from the 'Config' store
+
+# BDT model file to load
+BDTMuonModelFile ../LocalFolder/finalized_BDTmodel_forMuonEnergy.sav
+
+# testing data
+MuonEnergyTestingDataFile ../LocalFolder/BDT_testing_input.csv
+
+# predictions file
+MuonEnergyPredictionsFile ../LocalFolder/E_Mu_reco_results.csv     # Use 'NA' to not write predictions to file
+
+# deprecated: only train with neutrinos below this threshold
+BDT_NuE_threshold 2.0  # [GeV]

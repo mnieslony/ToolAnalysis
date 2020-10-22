@@ -128,6 +128,7 @@ class LoadWCSim: public Tool {
 	std::map<unsigned long,std::vector<MCHit>>* MCHits;
 	std::vector<TriggerClass>* TriggerData;
 	BeamStatusClass* BeamStatus;
+	int primarymuonindex;
 	
 	int primarymuonindex;
 	

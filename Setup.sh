@@ -16,7 +16,7 @@ export GENIE=/ToolAnalysis/ToolDAQ/Generator-R-3_00_04/
 
 export PATH=$GENIE/bin:$PATH
 
-for folder in `ls -d ${ToolDAQapp}/UserTools/*/ `
+for folder in `\ls -d ${ToolDAQapp}/UserTools/*/ `
 do
     export PYTHONPATH=$folder:${PYTHONPATH}
 done

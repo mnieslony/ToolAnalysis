@@ -18,7 +18,8 @@ class Geometry : public SerialisableObject{
 	
 	public:
 	// Do we care to have the overloaded empty constructor?
-	Geometry() : NextFreeChannelKey(0), NextFreeDetectorKey(0), Version(0.), tank_centre(Position(0,0,0)), tank_radius(0.), tank_halfheight(0.), pmt_enclosed_radius(0.), pmt_enclosed_halfheight(0.), mrd_width(0.), mrd_height(0.), mrd_depth(0.), mrd_start(0.), numtankpmts(0), nummrdpmts(0), numvetopmts(0), numlappds(0), Status(geostatus::FULLY_OPERATIONAL) {
+	//Geometry() : NextFreeChannelKey(0), NextFreeDetectorKey(0), Version(0.), tank_centre(Position(0,0,0)), tank_radius(0.), tank_halfheight(0.), pmt_enclosed_radius(0.), pmt_enclosed_halfheight(0.), mrd_width(0.), mrd_height(0.), mrd_depth(0.), mrd_start(0.), numtankpmts(0), nummrdpmts(0), numvetopmts(0), numlappds(0), Status(geostatus::FULLY_OPERATIONAL) {
+	Geometry() : NextFreeChannelKey(0), NextFreeDetectorKey(0), Version(0.), tank_centre(Position(0,0,0)), tank_radius(0.), tank_halfheight(0.), pmt_enclosed_radius(0.), pmt_enclosed_halfheight(0.), mrd_width(0.), mrd_height(0.), mrd_depth(0.), mrd_start(0.), numtankpmts(0), nummrdpmts(0), numvetopmts(0), numlappds(0), totaldetectorcount(0), Status(geostatus::FULLY_OPERATIONAL), Detectors(std::vector<std::map<unsigned long,Detector>* >{}) {
 		serialise=true;
 	}
 	
@@ -55,6 +56,7 @@ class Geometry : public SerialisableObject{
 	inline void SetMrdHeight(double mrd_heightIn){mrd_height = mrd_heightIn;}
 	inline void SetMrdDepth(double mrd_depthIn){mrd_depth = mrd_depthIn;}
 	inline void SetMrdStart(double mrd_startIn){mrd_start = mrd_startIn;}
+<<<<<<< HEAD
 	void SetDetectors(std::map<std::string,std::map<unsigned long,Detector> >DetectorsIn){
 		RealDetectors = DetectorsIn;  // copy them in; we want to own our detectors
 		// although if we're going to use this, we may wish to provide a method for passing in
@@ -71,6 +73,12 @@ class Geometry : public SerialisableObject{
 	}
 	void SetPaddles(std::map<unsigned long,Paddle> PaddlesIn){
 		Paddles = PaddlesIn;
+=======
+	void SetDetectors(std::vector<std::map<unsigned long,Detector>* >DetectorsIn){
+		Detectors = DetectorsIn;
+		detectorcounts.clear();
+		GetNumDetectors();
+>>>>>>> 4a0756abb887466c0e889ec8ae7847f23d9bf129
 	}
 	
 	unsigned long ConsumeNextFreeChannelKey(){
@@ -124,14 +132,25 @@ class Geometry : public SerialisableObject{
 			RealDetectors.emplace(thedetel,std::map<unsigned long,Detector>{});
 			Detectors.emplace(thedetel,std::map<unsigned long,Detector*>{});
 		}
+<<<<<<< HEAD
 		RealDetectors.at(thedetel).emplace(detin.GetDetectorID(), detin);
 		Detectors.at(thedetel).emplace(detin.GetDetectorID(),
 										&RealDetectors.at(thedetel).at(detin.GetDetectorID()));
 		
+=======
+		totaldetectorcount++;
+>>>>>>> 4a0756abb887466c0e889ec8ae7847f23d9bf129
 		return true;
 	}
 	
-	inline int GetNumDetectors(){return Detectors.size();}  // FIXME this is the num detector SETS
+	inline int GetNumDetectors(){
+		if(totaldetectorcount==0){
+			for(std::map<unsigned long,Detector>* adetset : Detectors){
+				totaldetectorcount+= adetset->size();
+			}
+		}
+		return totaldetectorcount;
+	}
 	Detector* GetDetector(unsigned long DetectorKey);
 	Detector* ChannelToDetector(unsigned long ChannelKey);
 	Channel* GetChannel(unsigned long ChannelKey);
@@ -216,7 +235,6 @@ class Geometry : public SerialisableObject{
 	
 	bool Print(){
 		int verbose=0;
-		cout<<"Num Detectors : "<<Detectors.size()<<endl;
 //		if(verbose){    // FIXME
 //			cout<<"Detectors : {"<<endl;
 //			for(auto&& adet : Detectors){
@@ -245,6 +263,7 @@ class Geometry : public SerialisableObject{
 		cout<<"Number of veto PMTs : " << numvetopmts << endl;
 		cout<<"Number of OD PMTs : "<< numodpmts << endl;
 		cout<<"Number of LAPPDs : "<< numlappds << endl;
+		cout<<"Total number of detectors : "<< totaldetectorcount << endl;
 		
 		return true;
 	}
@@ -287,6 +306,7 @@ class Geometry : public SerialisableObject{
 	int numvetopmts;
 	int numlappds;
 	int numodpmts;
+	int totaldetectorcount;
 	double fiducialradius;
 	double fiducialcutz;
 	double fiducialcuty;

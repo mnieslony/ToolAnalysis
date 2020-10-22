@@ -7,6 +7,15 @@ PyMODINIT_FUNC test(void){
 
 PythonScript::PythonScript():Tool(){}
 
+// Putting this in DataModel/PythonAPI.cpp caused all manner of errors???
+PyMODINIT_FUNC
+PyInit_Store(void){
+    PyObject *module = PyModule_Create(&StoreModule);
+    if (module == NULL)
+        return NULL;
+    //import_array();  // Must be present for passing NumPy arrays to/from C++
+    return module;
+}
 
 bool PythonScript::Initialise(std::string configfile, DataModel &data){
 
@@ -21,8 +30,16 @@ bool PythonScript::Initialise(std::string configfile, DataModel &data){
   m_variables.Get("InitialiseFunction",initialisefunction);
   m_variables.Get("ExecuteFunction",executefunction);
   m_variables.Get("FinaliseFunction",finalisefunction);
+  std::string scriptconfigfile="";
+  m_variables.Get("ConfigurationsFile",scriptconfigfile);
 
-  gstore=m_data->Stores["DataName"];
+  // Initialize a Store with the python script's variables
+  thisscriptsconfigstore.Initialise(scriptconfigfile);
+
+  gstore=m_data;
+  // each time we're running this python script, set the global gconfig to point to it's configurations store
+  // so that calls to the PythonAPI for config values will return values from the correct store.
+  gconfig=&thisscriptsconfigstore;
 
 
   PyImport_AppendInittab("Store", test);
@@ -30,6 +47,8 @@ bool PythonScript::Initialise(std::string configfile, DataModel &data){
   // Initialising Python
   pyinit=0;
   if(!(m_data->CStore.Get("PythonInit",pyinit))){
+    /* Add a built-in module, before Py_Initialize */
+    PyImport_AppendInittab("Store", PyInit_Store);
     Py_Initialize();
   }
 
@@ -68,11 +87,12 @@ bool PythonScript::Initialise(std::string configfile, DataModel &data){
     pFuncF = PyObject_GetAttrString(pModule, finalisefunction.c_str());
 
     if (pFuncI && pFuncE && pFuncF && PyCallable_Check(pFuncI) && PyCallable_Check(pFuncE) && PyCallable_Check(pFuncF)) {
-      pArgs = PyTuple_New(0);
+      //pArgs = PyTuple_New(0);
+       pArgs = Py_BuildValue("(i)",pyinit);
       
-      /* we dont rreally want to pass any arguments but have the option here
+      /* we dont really want to pass any arguments but have the option here
 	 for (int i = 0; i < 0; ++i) {
-	 pValue = PyInt_FromLong(i);
+	 pValue = PyLong_FromLong(i);
 	 if (!pValue) {
 	 Py_DECREF(pArgs);
 	 Py_DECREF(pModule);
@@ -90,7 +110,8 @@ bool PythonScript::Initialise(std::string configfile, DataModel &data){
       
       
       if(pValue != NULL){
-	if (!(PyLong_AsLong(pValue))){ 
+	//if (!(PyInt_AsLong(pValue))){ 
+	if(!(PyLong_AsLong(pValue))){
 	  std::cout<<"Python script returned internal error in initialise "<<std::endl;	
 	  return false;
 	}
@@ -131,6 +152,9 @@ bool PythonScript::Initialise(std::string configfile, DataModel &data){
 
 bool PythonScript::Execute(){
 
+  // make the config Store for this script accessible to the tool, should it need it in Execute
+  gconfig=&thisscriptsconfigstore;
+
   PyThreadState_Swap(pythread);
 
   if (pModule != NULL) {
@@ -142,6 +166,7 @@ bool PythonScript::Execute(){
       Py_DECREF(pArgs); // delete arguments
       
       if(pValue != NULL){
+	//if (!(PyInt_AsLong(pValue))){
 	if (!(PyLong_AsLong(pValue))){
 	  std::cout<<"Python script returned internal error in execute "<<std::endl;
 	  return false;
@@ -173,6 +198,9 @@ bool PythonScript::Execute(){
 
 
 bool PythonScript::Finalise(){
+
+  // make the config Store for this script accessible to the tool, should it need it in Finalise
+  gconfig=&thisscriptsconfigstore;
   
   PyThreadState_Swap(pythread);  
   
@@ -185,6 +213,7 @@ bool PythonScript::Finalise(){
       Py_DECREF(pArgs);
       
       if (pValue != NULL) {
+	//if (!(PyInt_AsLong(pValue))){
 	if (!(PyLong_AsLong(pValue))){
 	  std::cout<<"Python script returned internal error in finalise "<<std::endl;
           return false;
@@ -216,3 +245,4 @@ bool PythonScript::Finalise(){
   
   return true;
 }
+

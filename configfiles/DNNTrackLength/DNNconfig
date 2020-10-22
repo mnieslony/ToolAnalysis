@@ -1,4 +1,4 @@
-PythonScript DNNFindTrackLengthInWater
+PythonScript DNNFindTrackLengthInWater_train
 
 InitialiseFunction Initialise
 ExecuteFunction Execute

@@ -1,0 +1,10 @@
+PythonScript DNNFindTrackLengthInWater_train
+############### Training #################
+# Note: If we're going to train immediately following the FindTrackLengthInWater tool,
+# we need to switch Execute and Finalise functions. This makes the tool do nothing while
+# the input csv file is filled during the Execute loops, then train the DNN model
+# in the finalise step
+InitialiseFunction Initialise
+ExecuteFunction Finalise
+FinaliseFunction Execute
+ConfigurationsFile configfiles/EnergyReco/Train_Test/DNNTrackLengthTrainConfig

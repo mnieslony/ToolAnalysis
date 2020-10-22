@@ -1,0 +1,11 @@
+# This config file stores variables that may be retrieved by the python script
+# Access them by retrieving the corresponding variable from the 'Config' store
+
+# BDT model file to load
+BDTNeutrinoModelFile ../LocalFolder/finalized_BDTmodel_forNeutrinoEnergy.sav
+
+# for generating a legacy-style csv output
+NeutrinoEnergyPredictionsFile ../LocalFolder/BDT_NuE_predict_output.csv     # Use 'NA' to skip
+
+# deprecated: only train with neutrinos below this threshold
+BDT_NuE_threshold 2.0  # [GeV]

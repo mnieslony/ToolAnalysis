@@ -1,0 +1,9 @@
+# This config file stores variables that may be retrieved by the python script
+# Access them by retrieving the corresponding variable from the 'Config' store
+
+# DNN model, weights etc
+TrackLengthWeightsFile ../LocalFolder/weights_bets.hdf5
+
+# Training data
+TrackLengthTrainingDataFile ../LocalFolder/DNN_training_input.csv
+

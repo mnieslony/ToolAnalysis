@@ -1,0 +1,10 @@
+PythonScript BDT_MuonEnergyReco_train
+############### Training #################
+# Note: If we're going to do this as part of a toolchain,
+# we need to switch Execute and Finalise functions. This makes the tool do nothing while
+# the input csv file is filled during the Execute loops, then runs the tool
+# in the finalise step
+InitialiseFunction Initialise
+ExecuteFunction Finalise
+FinaliseFunction Execute
+ConfigurationsFile configfiles/EnergyReco/Train_Test/BDTMuonEnergyTrainConfig
