@@ -1,6 +1,7 @@
 # FMVEfficiency config file
 SinglePEGains ./configfiles/FMVEfficiency/ChannelSPEGains_BeamRun20192020.csv
 verbosity 0
-OutputFile FMVEfficiency_R1623_PMTMRD_p3
-UseTank 1
+OutputFile FMV_Counts_R2112_MrdGeometry_09-29-20_MRD_3Pads
+UseTank 0
 IsData 1
+PadPerLayer 3

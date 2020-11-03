@@ -18,8 +18,8 @@ drawGdmlOverlay 0       # draw a 3D representation of the ANNIE detector overlai
 drawStatistics 1        # histograms plotting some debug statistics about the track reconstruction
 saveimages 0            # save the paddle plots as images.
 saverootfile 1		# save the paddle plots within a rootfile.
-plotDirectory ./MrdPlots  # where to save plot images
+plotDirectory ./  # where to save plot images
 printTClonesTracks 0    # verbose printout of track information from TClonesArray
 useTApplication 0	# launch a TApplication to directly show the plots (slow on cluster)
-OutputROOTFile MRDPaddlePlots_R2135
-DrawOnlyTracks 1	# should subevents only be drawn if there was a track found?
+OutputROOTFile MRDPaddlePlots_beam_MRDEff_805
+DrawOnlyTracks 0	# should subevents only be drawn if there was a track found?

@@ -1,7 +1,7 @@
 verbosity 5
 
 BuildType TankAndMRD
-ProcessedFilesBasename ProcessedRawData_TankMRDR1623p1
+ProcessedFilesBasename ProcessedRawData_TankMRDR2034
 NumEventsPerPairing 50
 SavePath ./
 

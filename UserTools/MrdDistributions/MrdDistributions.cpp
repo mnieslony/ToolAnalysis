@@ -205,6 +205,7 @@ bool MrdDistributions::Execute(){
 	
 	// Get the ANNIE event and extract general event information
 	// Maybe this information could be added to plots for reference
+	std::cout <<"Getting information from ANNIEEvent"<<std::endl;
 	m_data->Stores.at("ANNIEEvent")->Get("MCFile",MCFile);
 	m_data->Stores.at("ANNIEEvent")->Get("RunNumber",RunNumber);
 	m_data->Stores.at("ANNIEEvent")->Get("SubrunNumber",SubrunNumber);
@@ -217,6 +218,7 @@ bool MrdDistributions::Execute(){
 	ParticleId_to_MrdTubeIds = nullptr;
 	m_data->Stores.at("ANNIEEvent")->Get("ParticleId_to_MrdTubeIds",ParticleId_to_MrdTubeIds);
 	
+	std::cout <<"Getting true track info"<<std::endl;
 	// retrieving true tracks from the BoostStore
 	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	get_ok = m_data->Stores["ANNIEEvent"]->Get("MCParticles",MCParticles);
@@ -225,6 +227,8 @@ bool MrdDistributions::Execute(){
 		return false;
 	}
 	
+	std::cout <<"Getting extended vertex info"<<std::endl;
+	/*
 	// retrieving tank reco vertex from the BoostStore
 	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	recoVtxOrigin = ROOT::Math::XYZVector(-999,-999,-999);
@@ -237,7 +241,9 @@ bool MrdDistributions::Execute(){
 			}
 		}
 	}
-	
+	*/	
+
+	std::cout <<"Getting reco track info"<<std::endl;
 	// retrieving reconstructed tracks from the BoostStore
 	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	// first the counts of subevents and tracks - do not use tracks beyond these
@@ -590,7 +596,7 @@ bool MrdDistributions::Execute(){
 	Log("MrdDistributions Tool: Looping over MCParticles",v_debug,verbosity);
 	for(int tracki=0; tracki<MCParticles->size(); tracki++){
 		MCParticle* nextparticle = &MCParticles->at(tracki);
-		if(nextparticle->GetPdgCode()!=13)                continue; // only interested in muons
+		if(fabs(nextparticle->GetPdgCode())!=13)                continue; // only interested in muons 	// EDIT: Added -13 (mu+) as possible option
 		if(not (nextparticle->GetEntersMrd()))            continue; // only record tracks that entered the MRD
 		if(nextparticle->GetMCTriggerNum()!=MCTriggernum) continue; // only record in their proper trigger
 		nummrdtracksthisevent++;
@@ -971,12 +977,12 @@ TFile* MrdDistributions::MakeRootFile(){
 	recotree->Branch("MCTriggernum",&MCTriggernum);
 	recotree->Branch("NumSubEvs",&numsubevs);
 	recotree->Branch("NumTracksInSubEv",&numtracksinev);
-	recotree->Branch("NumTrueTracksInSubEv",&nummrdtracksthisevent);
+//	recotree->Branch("NumTrueTracksInSubEv",&nummrdtracksthisevent);
 	recotree->Branch("NumHitMrdPMTsInEvent",&NumHitMrdPMTsInEvent);
 	recotree->Branch("NumMrdHitsInEvent",&NumMrdHitsInEvent);
 //	recotree->Branch("NumHitMrdPMTsInEvent",&NumHitMrdPMTsInSubEvent);
 //	recotree->Branch("NumHitMrdHitsInEvent",&NumMrdHitsInSubEvent);
-	recotree->Branch("RecoVtxOrigin",&recoVtxOrigin);
+//	recotree->Branch("RecoVtxOrigin",&recoVtxOrigin);
 	
 	// track-wise information vectors
 	recotree->Branch("MrdSubEventID", &pfileout_MrdSubEventID);
@@ -1039,8 +1045,8 @@ TFile* MrdDistributions::MakeRootFile(){
 	truthtree->Branch("NumHitMrdPMTsInEvent",&NumHitMrdPMTsInEvent);
 	truthtree->Branch("NumMrdHitsInEvent",&NumMrdHitsInEvent);
 //	truthtree->Branch("NumTracksInSubEv",&numtracksinev);
-//	truthtree->Branch("NumTrueTracksInSubEv",&nummrdtracksthisevent);
-	truthtree->Branch("RecoVtxOrigin",&recoVtxOrigin);
+	truthtree->Branch("NumTrueTracksInSubEv",&nummrdtracksthisevent);
+//	truthtree->Branch("RecoVtxOrigin",&recoVtxOrigin);
 	// track-wise information
 	truthtree->Branch("MCTruthParticleID", &pfileout_MCTruthParticleID);
 	truthtree->Branch("RecoParticleID",&pfileout_RecoParticleID);

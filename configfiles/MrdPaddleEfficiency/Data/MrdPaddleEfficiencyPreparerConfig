@@ -1,4 +1,4 @@
 #MRDPaddleEfficiencyPreparer Config file
 
-OutputFile RAWDataR1613S0p89R0S0
+OutputFile mrd_observed_R2146S0_MrdGeometry_09-29-20_Test_1Track
 verbosity 1
