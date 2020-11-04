@@ -63,6 +63,11 @@ bool LoadWCSim::Initialise(std::string configfile, DataModel &data){
 		Log("LoadWCSim Tool: No Triggertype specified. Assuming TriggerType = Beam",v_warning,verbosity);
 		Triggertype = "Beam";	//other options: Cosmic / No Loopback
 	}
+        get_ok = m_variables.Get("RunType",RunType);
+        if (not get_ok){
+                Log("LoadWCSim Tool: No RunType specified. Assuming RunType = 3 (Beam)",v_warning,verbosity);
+                RunType = 3;
+        }
 	MCEventNum=0;
 	get_ok = m_variables.Get("FileStartOffset",MCEventNum);
 	
@@ -668,6 +673,7 @@ bool LoadWCSim::Execute(){
 	if(verbosity>1) cout<<"setting the store variables"<<endl;
 	m_data->Stores.at("ANNIEEvent")->Set("RunNumber",RunNumber);
 	m_data->Stores.at("ANNIEEvent")->Set("SubrunNumber",SubrunNumber);
+        m_data->Stores.at("ANNIEEvent")->Set("RunType",RunType);
 	m_data->Stores.at("ANNIEEvent")->Set("EventNumber",EventNumber);
 	if(verbosity>2) cout<<"particles"<<endl;
 	m_data->Stores.at("ANNIEEvent")->Set("MCParticles",MCParticles,true);
@@ -689,6 +695,8 @@ bool LoadWCSim::Execute(){
 	if(verbosity>2) cout<<"triggerdata"<<endl;
 	m_data->Stores.at("ANNIEEvent")->Set("TriggerData",TriggerData,true);
 	if(verbosity>2) cout<<"eventtime"<<endl;
+        long runstarttime = RunStartTime.GetNs();
+        m_data->Stores.at("ANNIEEvent")->Set("RunStartTime",runstarttime);
 	m_data->Stores.at("ANNIEEvent")->Set("EventTime",EventTime,true);
 	m_data->Stores.at("ANNIEEvent")->Set("MCEventNum",MCEventNum);
 	m_data->Stores.at("ANNIEEvent")->Set("MCTriggernum",MCTriggernum);
@@ -961,7 +969,8 @@ Geometry* LoadWCSim::ConstructToolChainGeometry(){
 		unsigned long uniquechannelkey = anniegeom->ConsumeNextFreeChannelKey();
 		pmt_tubeid_to_channelkey.emplace(apmt.GetTubeNo(), uniquechannelkey);
 		channelkey_to_pmtid.emplace(uniquechannelkey,apmt.GetTubeNo());
-		
+		std::cout <<"LoadWCSim: pmt tube id: "<< apmt.GetTubeNo()<<", channelkey: "<<uniquechannelkey<<std::endl;		
+
 		// fill up ADC cards and channels monotonically, they're arbitrary for simulation
 		ADC_Chan_Num++;
 		if(ADC_Chan_Num>=ADC_CHANNELS_PER_CARD)  { ADC_Chan_Num=0; ADC_Card_Num++; MT_Chan_Num++; }
@@ -1136,7 +1145,8 @@ Geometry* LoadWCSim::ConstructToolChainGeometry(){
 		unsigned long uniquechannelkey = anniegeom->ConsumeNextFreeChannelKey();
 		facc_tubeid_to_channelkey.emplace(apmt.GetTubeNo(), uniquechannelkey);
 		channelkey_to_faccpmtid.emplace(uniquechannelkey, apmt.GetTubeNo());
-		
+		//std::cout <<"Emplace veto chkey: "<<uniquechannelkey<<", pmtid: "<<apmt.GetTubeNo()<<", (x,y,z) = ("<<apmt.GetPosition(0)/100.<<","<<apmt.GetPosition(1)/100.<<","<<apmt.GetPosition(2)/100.<<"), faccpmti: "<<faccpmti<<std::endl;		
+
 		// fill up TDC cards and channels monotonically, they're arbitrary for simulation
 		TDC_Chan_Num++;
 		if(TDC_Chan_Num>=TDC_CHANNELS_PER_CARD)  { TDC_Chan_Num=0; TDC_Card_Num++;  }
@@ -1187,7 +1197,8 @@ Geometry* LoadWCSim::ConstructToolChainGeometry(){
 		std::pair<double,double>{-1.6,1.6},  // numbers from WCSim source files / measurements
 		std::pair<double,double>{paddle_yorigin-0.1525,paddle_yorigin+0.1525},
 		std::pair<double,double>{paddle_zorigin-0.01,paddle_zorigin+0.01});
-		
+		//std::cout <<"Paddle position: (x,y,z) = (0,"<<paddle_yorigin<<","<<paddle_zorigin<<")"<<std::endl;	
+	
 		if(verbosity>4) cout<<"Setting paddle for detector "<<uniquedetectorkey<<endl;
 		anniegeom->SetDetectorPaddle(uniquedetectorkey,apaddle);
 		

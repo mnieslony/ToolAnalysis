@@ -1,0 +1,10 @@
+myLoadGeometry LoadGeometry ./configfiles/LoadGeometry/LoadGeometryConfig
+myLoadWCSim LoadWCSim ./configfiles/MC_Ntuple/LoadWCSimConfig
+myLoadWCSimLAPPD LoadWCSimLAPPD ./configfiles/MC_Ntuple/LoadWCSimLAPPDConfig
+myMCParticleProperties MCParticleProperties ./configfiles/MC_Ntuple/MCParticlePropertiesConfig
+myMCRecoEventLoader MCRecoEventLoader ./configfiles/MC_Ntuple/MCRecoEventLoaderConfig
+myTimeClustering TimeClustering configfiles/MC_Ntuple/TimeClusteringConfig
+myFindMrdTracks FindMrdTracks configfiles/MC_Ntuple/FindMrdTracksConfig
+myClusterFinder ClusterFinder ./configfiles/MC_Ntuple/ClusterFinderConfig
+myClusterClassifiers ClusterClassifiers ./configfiles/MC_Ntuple/ClusterClassifiersConfig
+myPhaseIITreeMaker PhaseIITreeMaker ./configfiles/MC_Ntuple/PhaseIITreeMakerConfig

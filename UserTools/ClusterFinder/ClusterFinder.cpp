@@ -27,6 +27,7 @@ bool ClusterFinder::Initialise(std::string configfile, DataModel &data){
   m_variables.Get("Plots2D",draw_2D);
   m_variables.Get("verbosity",verbose);
   m_variables.Get("end_of_window_time_cut",end_of_window_time_cut);
+  m_variables.Get("ChankeyToPMTIDMap",path_chankeymap);
 
   //----------------------------------------------------------------------------
   //---------------Get basic geometry properties -------------------------------
@@ -132,6 +133,20 @@ bool ClusterFinder::Initialise(std::string configfile, DataModel &data){
   m_all_clusters = new std::map<double,std::vector<Hit>>;
   m_all_clusters_MC = new std::map<double,std::vector<MCHit>>;
   m_all_clusters_detkey = new std::map<double,std::vector<unsigned long>>;
+
+  ifstream file_pmtid(path_chankeymap.c_str());
+  while (!file_pmtid.eof()){
+    unsigned long chankey;
+    int pmtid;
+    file_pmtid >> chankey >> pmtid;
+    channelkey_to_pmtid.emplace(chankey,pmtid);
+    pmtid_to_channelkey.emplace(pmtid,chankey);
+    if (file_pmtid.eof()) break;
+  }
+
+  file_pmtid.close();
+  m_data->CStore.Set("pmt_tubeid_to_channelkey_data",pmtid_to_channelkey);
+  m_data->CStore.Set("channelkey_to_pmtid_data",channelkey_to_pmtid);
 
   return true;
 }
@@ -249,8 +264,8 @@ bool ClusterFinder::Execute(){
 
   // Now sort the hit time array, fill the highest time in a new array until the old array is empty
   do {
-    double max_time =0;
-    int i_max_time =0;
+    double max_time = 0;
+    int i_max_time = 0;
     for (std::vector<double>::iterator it = v_hittimes.begin(); it != v_hittimes.end(); ++it) {
       if (*it > max_time) {
         max_time = *it;

@@ -67,6 +67,7 @@ class ClusterFinder: public Tool {
   int MinHitsPerCluster;
   bool draw_2D = false;
   double end_of_window_time_cut;
+  std::string path_chankeymap;
 
   // define ANNIEEvent variables
   int evnum;
@@ -120,7 +121,9 @@ class ClusterFinder: public Tool {
   std::map<double,std::vector<Hit>>* m_all_clusters;  
   std::map<double,std::vector<MCHit>>* m_all_clusters_MC;  
   std::map<double,std::vector<unsigned long>>* m_all_clusters_detkey; 
- 
+  std::map<int,unsigned long> pmtid_to_channelkey;
+  std::map<unsigned long,int> channelkey_to_pmtid; 
+
   // Other variables
   int max_Nhits = 0;
   double local_cluster = 0;
