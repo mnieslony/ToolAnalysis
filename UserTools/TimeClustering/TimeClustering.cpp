@@ -113,7 +113,7 @@ bool TimeClustering::Initialise(std::string configfile, DataModel &data){
 		}
 		file_mapping.close();
 		m_data->CStore.Set("channelkey_to_mrdpmtid",channelkey_to_mrdpmtid);
-		m_data->CStore.Set("mrdpmtid_to_channelkey",mrdpmtid_to_channelkey);
+		m_data->CStore.Set("mrd_tubeid_to_channelkey",mrdpmtid_to_channelkey);
 		}
 	else {
 		ifstream file_mapping(file_chankeymap);

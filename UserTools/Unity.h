@@ -127,3 +127,5 @@
 #include "MRDLoopbackAnalysis.h"
 #include "VetoEfficiency.h"
 #include "EventClassification.h"
+#include "MonitorTrigger.h"
+#include "DataSummary.h"
