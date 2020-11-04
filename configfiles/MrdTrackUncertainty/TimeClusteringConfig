@@ -7,6 +7,6 @@ MinSubeventTimeSep 30
 MakeMrdDigitTimePlot 1
 LaunchTApplication 0
 IsData 0
-OutputROOTFile TimeClustering_wcsim_beam_MRDEff_805
+OutputROOTFile TimeClustering_wcsim_beam_MRDEff_999
 MapChankey_WCSimID ./configfiles/MrdPaddleEfficiency/MRD_Chankey_WCSimID.dat
 
