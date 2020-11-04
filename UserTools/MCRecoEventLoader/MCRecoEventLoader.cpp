@@ -143,6 +143,7 @@ void MCRecoEventLoader::FindTrueVertexFromMC() {
   }
   if(not mufound){
     Log("MCRecoEventLoader::  Tool: No muon in this event",v_warning,verbosity);
+    m_data->Stores.at("RecoEvent")->Set("PdgPrimary",-9999);
     return;
   }
   
@@ -162,6 +163,7 @@ void MCRecoEventLoader::FindTrueVertexFromMC() {
   WaterTrackLength = primarymuon.GetTrackLengthInTank();
 
   //std::cout <<"MCRecoEventLoader: Muon start position: ("<<muonstartpos.X()<<","<<muonstartpos.Y()<<","<<muonstartpos.Z()<<")"<<std::endl;
+  //std::cout <<"MRDTrackLength: "<<MRDTrackLength<<", WaterTrackLength: "<<WaterTrackLength<<std::endl;
   // set true vertex
   // change unit
   muonstartpos.UnitToCentimeter(); // convert unit from meter to centimeter
@@ -304,6 +306,7 @@ void MCRecoEventLoader::PushTrueMuonEnergy(double MuE) {
 
 void MCRecoEventLoader::PushTrueWaterTrackLength(double WaterT) {
 	Log("MCRecoEventLoader Tool: Push true track length in tank to the RecoEvent store",v_message,verbosity);
+        //std::cout <<"Set true track length in water: "<<WaterT<<" to RecoEvent store"<<std::endl;
 	m_data->Stores.at("RecoEvent")->Set("TrueTrackLengthInWater", WaterT);  ///> Add digits to RecoEvent
 }
 

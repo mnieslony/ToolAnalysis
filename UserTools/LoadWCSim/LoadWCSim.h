@@ -63,7 +63,8 @@ class LoadWCSim: public Tool {
 	int LappdNumStrips;           // number of Channels per LAPPD
 	double LappdStripLength;      // [mm] for calculating relative x position for dual-ended readout
 	double LappdStripSeparation;  // [mm] for calculating relative y position of each stripline
-	
+	int RunType;	
+
 	// WCSim variables
 	//////////////////
 	//TFile* file;
