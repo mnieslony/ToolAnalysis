@@ -113,7 +113,7 @@ bool TimeClustering::Initialise(std::string configfile, DataModel &data){
 			if (file_mapping.eof()) break;
 			channelkey_to_mrdpmtid.emplace(temp_chankey,temp_wcsimid);
 			mrdpmtid_to_channelkey.emplace(temp_wcsimid,temp_chankey);
-			Log("FindMrdTracks tool: Emplaced temp_chankey "+std::to_string(temp_chankey)+" with temp_wcsimid "+std::to_string(temp_wcsimid)+"into channelkey_to_mrdpmtid object!",v_debug,verbosity);
+			Log("TimeClustering tool: Emplaced temp_chankey "+std::to_string(temp_chankey)+" with temp_wcsimid "+std::to_string(temp_wcsimid)+"into channelkey_to_mrdpmtid object!",v_debug,verbosity);
 		}
 		file_mapping.close();
 		m_data->CStore.Set("channelkey_to_mrdpmtid",channelkey_to_mrdpmtid);
@@ -291,12 +291,13 @@ bool TimeClustering::Execute(){
 			int pmtidwcsim=-1;
 			if (channelkey_to_mrdpmtid.count(chankey)){
 				pmtidwcsim = channelkey_to_mrdpmtid.at(chankey)-1;
-			} else if(channelkey_to_faccpmtid.count(chankey)){
+			} /*else if(channelkey_to_faccpmtid.count(chankey)){ /////omit facc hits for MRD clusters
 				pmtidwcsim = channelkey_to_faccpmtid.at(chankey)-1;
-			}
+			}*/
 			for(auto&& hitsonthismrdpmt : anmrdpmt.second){
 				if(pmtidwcsim>=0){
 					mrddigitpmtsthisevent.push_back(pmtidwcsim);
+					mrddigitchankeysthisevent.push_back(chankey);
 					mrddigittimesthisevent.push_back(hitsonthismrdpmt.GetTime());
 					mrddigitchargesthisevent.push_back(hitsonthismrdpmt.GetCharge());
 					mrddigitchankeysthisevent.push_back(chankey);
@@ -351,9 +352,7 @@ bool TimeClustering::Execute(){
 	// =================
 		Log("TimeClustering Tool: All hits this event within one subevent.",v_debug,verbosity);
 		std::vector<int> digitidsinasubevent(numdigits);    // a vector of indices of the digits in this subevent
-		std::cout <<"iota"<<std::endl;
 		std::iota(digitidsinasubevent.begin(),digitidsinasubevent.end(),0);  // fill with 1-N, as all digits are are in this subevent
-		std::cout <<"push back to MrdTimeClusters"<<std::endl;
 		MrdTimeClusters.push_back(digitidsinasubevent);
 		std::cout <<"Make MrddigitTimePlots"<<std::endl;
 		if (MakeMrdDigitTimePlot){

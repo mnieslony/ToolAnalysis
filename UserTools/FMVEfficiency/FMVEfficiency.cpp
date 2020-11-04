@@ -627,6 +627,7 @@ bool FMVEfficiency::Finalise(){
   //  --------------------------------
 
   file->cd();
+  fmv_layer1_layer2->Write();
   for (unsigned int i_fmv = 0; i_fmv < fmv_secondlayer.size(); i_fmv++){
     fmv_observed_layer1->SetBinContent(i_fmv+1,fmv_firstlayer_observed.at(i_fmv));
     fmv_expected_layer1->SetBinContent(i_fmv+1,fmv_firstlayer_expected.at(i_fmv));
