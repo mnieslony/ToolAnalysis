@@ -59,62 +59,22 @@ bool LoadANNIEEvent::Execute() {
   if (need_new_file_) {
     need_new_file_=false;
 
-    // Delete the old file BoostStore if there is one
-    if(m_data->Stores.count("ProcessedFileStore")){
-      BoostStore* ProcessedFileStore = m_data->Stores.at("ProcessedFileStore");
-//      ProcessedFileStore->Close();   // XXX should we be calling these?
-//      ProcessedFileStore->Delete();  // XXX
-      delete ProcessedFileStore;
-    }
-    // also close and cleanup the associated contained stores
+    // Delete the old ANNIEEvent Store if there is one
     if ( m_data->Stores.count("ANNIEEvent") ) {
       auto* annie_event = m_data->Stores.at("ANNIEEvent");
-      if (annie_event){
-//        annie_event->Close();
-//        annie_event->Delete();
-        delete annie_event;
-      }
+      if (annie_event) delete annie_event;
     }
-/*
-    if(m_data->Stores.count("OrphanStore")){
-      auto* annie_orphans = m_data->Stores.at("OrphanStore");
-      if (annie_orphans){
-//        annie_orphans->Close();
-//        annie_orphans->Delete();
-        delete annie_orphans;
-      }
-    }
-*/
 
-    // create a store for the file contents
-    BoostStore* ProcessedFileStore = new BoostStore(false,BOOST_STORE_BINARY_FORMAT);
-    // Load the contents from the new input file into it
+    // Create a new ANNIEEvent Store
+    m_data->Stores["ANNIEEvent"] = new BoostStore(false,
+      BOOST_STORE_MULTIEVENT_FORMAT);
+
+    // Load it from the new input file
     std::string input_filename = input_filenames_.at(current_file_);
     std::cout <<"Reading in current file "<<current_file_<<std::endl;
-    ProcessedFileStore->Initialise(input_filename);
-    m_data->Stores["ProcessedFileStore"]=ProcessedFileStore;
-    
-    // create an ANNIEEvent BoostStore and an OrphanStore BoostStore to load from it
-    BoostStore* theANNIEEvent = new BoostStore(false,
-      BOOST_STORE_MULTIEVENT_FORMAT);
-    
-    // retrieve the multi-event stores
-    ProcessedFileStore->Get("ANNIEEvent",*theANNIEEvent);
-    // set a pointer into the Stores map
-    m_data->Stores["ANNIEEvent"]=theANNIEEvent;
-    // get the number of entries
-    m_data->Stores.at("ANNIEEvent")->Header->Get("TotalEntries",
+    m_data->Stores["ANNIEEvent"]->Initialise(input_filename);
+    m_data->Stores["ANNIEEvent"]->Header->Get("TotalEntries",
       total_entries_in_file_);
-    
-/*
-    // same for Orphan Store
-    BoostStore* theOrphanStore = new BoostStore(false,
-      BOOST_STORE_MULTIEVENT_FORMAT);
-    ProcessedFileStore->Get("OrphanStore",*theOrphanStore);
-    m_data->Stores.["OrphanStore"] = theOrphanStore;
-    m_data->Stores.at("OrphanStore")->Header->Get("TotalEntries",
-      total_orphans_in_file_);
-*/
   }
 
    bool user_event=false;

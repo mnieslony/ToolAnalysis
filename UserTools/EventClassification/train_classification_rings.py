@@ -32,11 +32,11 @@ import argparse
 #------- Parse user arguments ----
 
 parser = argparse.ArgumentParser(description='Ring Classification training - Overview')
-parser.add_argument("--input", default="data_new.nosync/beam_DigitThr10_0_4996_Full.csv", help = "The electron input file [csv-format]")
+parser.add_argument("--input", default="/pnfs/annie/persistent/users/mnieslon/ml_tutorial/mlp/classification_csv/beam_DigitThr10_MRDCluster_0_4996_Full.csv", help = "The ring counting input file [csv-format]")
 parser.add_argument("--status_suffix", default="Full.csv", help = "The strings of the input file to be replaced when looking at the status file.")
-parser.add_argument("--variable_names", default="VariableConfig_Full.txt", help = "File containing the list of classification variables")
+parser.add_argument("--variable_names", default="VariableConfig_Full_MRDCluster.txt", help = "File containing the list of classification variables")
 parser.add_argument("--model_name",default="MLP",help="Classififier to use for training. Options: RandomForest, XGBoost, SVM, SGD, MLP, GradientBoosting, All")
-parser.add_argument("--dataset_name",default="beam",help="Keyword describing dataset name (used to label output files)")
+parser.add_argument("--dataset_name",default="tutorial_beam",help="Keyword describing dataset name (used to label output files)")
 parser.add_argument("--balance_data",default=True,help="Should the dataset be made even for the training process?")
 parser.add_argument("--plot_roc",default=False,help="Shall ROC curve be drawn?")
 parser.add_argument("--plot_prec_recall",default=False,help="Shall Precision-Recall curve be drawn?")

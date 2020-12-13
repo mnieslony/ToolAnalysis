@@ -33,12 +33,12 @@ import argparse #For user input
 #------- Parse user arguments ----
 
 parser = argparse.ArgumentParser(description='PID classification training - Overview')
-parser.add_argument("--input_e", default="data_new.nosync/beamlike_electrons_histogram_DigitThr10_0_999_Full.csv", help = "The electron input file [csv-format]")
-parser.add_argument("--input_mu", default="data_new.nosync/beamlike_muons_histogram_DigitThr10_0_399_Full.csv", help = "The muon input file [csv-format]")
+parser.add_argument("--input_e", default="/pnfs/annie/persistent/users/mnieslon/ml_tutorial/mlp/classification_csv/beamlike_electrons_updatedMRD_DigitThr10_0_999_Full.csv", help = "The electron input file [csv-format]")
+parser.add_argument("--input_mu", default="/pnfs/annie/persistent/users/mnieslon/ml_tutorial/mlp/classification_csv/beamlike_muons_updatedMRD_DigitThr10_0_399_Full.csv", help = "The muon input file [csv-format]")
 parser.add_argument("--status_suffix", default="Full.csv", help = "The strings of the input file to be replaced when looking at the status file.")
-parser.add_argument("--variable_names", default="VariableConfig_Full.txt", help = "File containing the list of classification variables")
+parser.add_argument("--variable_names", default="VariableConfig_Full_MRDCluster.txt", help = "File containing the list of classification variables")
 parser.add_argument("--model_name",default="MLP",help="Classififier to use for training. Options: RandomForest, XGBoost, SVM, SGD, MLP, GradientBoosting, All")
-parser.add_argument("--dataset_name",default="beamlikev2",help="Keyword describing dataset name (used to label output files)")
+parser.add_argument("--dataset_name",default="tutorial_beamlike",help="Keyword describing dataset name (used to label output files)")
 parser.add_argument("--balance_data",default=True,help="Should the dataset be made even for the training process?")
 parser.add_argument("--plot_roc",default=False,help="Shall ROC curve be drawn?")
 parser.add_argument("--plot_prec_recall",default=False,help="Shall Precision-Recall curve be drawn?")
@@ -157,6 +157,7 @@ print("Feature labels: ",feature_labels)
 
 # Scale data (training set) to 0 mean and unit standard deviation.
 scaler = preprocessing.StandardScaler()
+print("X_train0: ",X_train0)
 X_train = pd.DataFrame(scaler.fit_transform(X_train0))
 X_test = pd.DataFrame(scaler.transform(X_test0))
 print("type(X_train) ",type(X_train)," type(X_train0): ",type(X_train0))
@@ -164,20 +165,20 @@ y_train2 = np.array(y_train).ravel() #Return a contiguous flattened 1-d array
 print("X_train.shape: ",X_train.shape," y_train2.shape: ",y_train2.shape, "X_test.shape: ",X_test.shape," y_test.shape: ",y_test.shape)
 
 
-fig=[]
-for plot in range(num_plots):
-    if model_name != "All":
-        fig.append(plt.figure(plot,figsize=(15,10)))
-    else:
-        fig.append(plt.figure(plot,figsize=(15,20)))
-if model_name != "All":
-    fig_roc = plt.figure(num_plots+1,figsize=(15,10))
-    fig_pr = plt.figure(num_plots+2,figsize=(15,10))
-    fig_trash = plt.figure(num_plots+3,figsize=(15,10))
-else:
-    fig_roc = plt.figure(num_plots+1,figsize=(15,20))
-    fig_pr = plt.figure(num_plots+2,figsize=(15,20))
-    fig_trash = plt.figure(num_plots+3,figsize=(15,20)) #trash image just so the rectangle is not painted on top of fig_pr or fig_roc
+#fig=[]
+#for plot in range(num_plots):
+#    if model_name != "All":
+#        fig.append(plt.figure(plot,figsize=(15,10)))
+#    else:
+#        fig.append(plt.figure(plot,figsize=(15,20)))
+#if model_name != "All":
+#    fig_roc = plt.figure(num_plots+1,figsize=(15,10))
+#    fig_pr = plt.figure(num_plots+2,figsize=(15,10))
+#    fig_trash = plt.figure(num_plots+3,figsize=(15,10))
+#else:
+#    fig_roc = plt.figure(num_plots+1,figsize=(15,20))
+#    fig_pr = plt.figure(num_plots+2,figsize=(15,20))
+#    fig_trash = plt.figure(num_plots+3,figsize=(15,20)) #trash image just so the rectangle is not painted on top of fig_pr or fig_roc
 
 
 # ------------------------------------------------------------------

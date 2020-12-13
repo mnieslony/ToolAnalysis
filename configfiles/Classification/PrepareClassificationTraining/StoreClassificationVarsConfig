@@ -1,7 +1,7 @@
 # StoreClassificationVars config file
 
 verbosity 1
-Filename beam_DigitThr0_MRDCluster_4996
+Filename beam_DigitThr0_MRDCluster_0
 SaveCSV 1
 SaveROOT 1
 VariableConfig Full

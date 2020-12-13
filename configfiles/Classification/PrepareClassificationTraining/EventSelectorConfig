@@ -2,7 +2,7 @@
 
 verbosity 1
 MRDRecoCut 0
-MCFVCut 0
+MCFVCut 1
 MCPMTVolCut 1
 MCMRDCut 0
 MCPiKCut 0

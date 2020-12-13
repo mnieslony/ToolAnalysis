@@ -1,0 +1,115 @@
+For the ANNIE analysis/software workshop on 2020/12/14
+Authors: David Maksimovic, Michael Nieslony
+
+---------------------------------------------
+///////////////////////////////////////////////
+/////Part 0: Prepare environment////--
+///////////////////////////////////////////////
+-------------------------------------------
+
+//Get code from special branch (not everything in head branch yet, also current version of LoadANNIEEvent doesn’t work with old files)
+git remote add mnieslony https://github.com/mnieslony/ToolAnalysis.git
+git checkout -b ml_tutorial
+git pull mnieslony MLTutorial
+
+//Make the application
+make clean
+source Setup.sh [or] source SetupSingularity.sh
+make [or] make -f Makefile.Singularity
+
+Txt-file containing these very same instructions will be in ToolAnalysis directory for this branch
+vi ml_tutorial_instructions.txt
+
+---------------------------------------------
+///////////////////////////////////////////////
+/////Part I: Multi-Layer-Perceptron////
+///////////////////////////////////////////////
+-------------------------------------------
+
+////////////////////////////////////////
+Create own MLP csv input files
+////////////////////////////////////////
+
+On MC:
+./Analyse PrepareClassificationTraining
+
+On data
+./Analyse PrepareClassificationTrainingData
+
+
+///////////////////////////////
+Train an e/mu classifier:
+///////////////////////////////
+
+Find out what variables can be configured
+python3.6 train_classification_emu.py --help
+
+Train MLP classifier
+python3.6 train_classification_emu.py
+
+
+/////////////////////////////////////
+Predict with e/mu classifier:
+/////////////////////////////////////
+
+Find out which variables can be configured:
+python3.6 do_classification_emu.py --help
+
+Use trained model to predict events in beam dataset:
+python3.6 do_classification_emu.py
+
+////////////////////////////////////////
+Train a ring counting classifier:
+///////////////////////////////////////
+
+Find out which variables can be configured:
+python3.6 train_classification_rings.py --help
+
+Train MLP classifier
+python3.6 train_classification_rings.py
+
+///////////////////////////////////////////////
+Predict with ring counting classifier:
+///////////////////////////////////////////////
+
+Find out which variables can be configured:
+python3.6 do_classification_rings.py --help
+
+The following can not be used for evaluating the performance of the RingCounting classifier, since we already trained on this dataset. Just to demonstrate how to use the trained model on a dataset
+python3.6 do_classification_rings.py
+
+
+---------------------------------------------
+///////////////////////////////////////////////
+//////////////Part II: CNN//////////////////
+///////////////////////////////////////////////
+-------------------------------------------
+
+////////////////////////////////////////
+Create own CNN csv input files
+////////////////////////////////////////
+
+On MC:
+./Analyse PrepareCNNImageMC
+
+On data
+./Analyse PrepareCNNImageData
+
+
+////////////////////////////////////////
+Train a ring counting classifier:
+///////////////////////////////////////
+
+python3.6 cnn_network_creator.py
+
+///////////////////////////////////////////////
+Predict with ring counting classifier:
+///////////////////////////////////////////////
+
+python3.6 cnn_prediction.py
+
+///////////////////////////////////////
+Train & predict a PID classifier
+//////////////////////////////////////
+
+Change the input files and names in the scripts cnn_network_creator.py and cnn_prediction.py, use analogously.

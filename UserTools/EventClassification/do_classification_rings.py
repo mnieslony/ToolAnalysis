@@ -31,10 +31,16 @@ import argparse #For user input
 #------- Parse user arguments ----
 
 parser = argparse.ArgumentParser(description='Ring Classification - Overview')
-parser.add_argument("--input", default="/annie/app/users/mnieslon/MyToolAnalysis6/classification_data/R1613S0p1_Full.csv", help = "The input file containing the classification variables [csv-format]")
-parser.add_argument("--output", default="/annie/app/users/mnieslon/MyToolAnalysis6/R1613S0p1_ringcounting_predictions.txt", help = "The output file containing the predictions of the classifier")
-parser.add_argument("--variable_names", default="VariableConfig_PMTOnly_Q.txt", help = "File containing the list of classification variables")
-parser.add_argument("--model",default="models/ringcounting_model_beam_PMTOnly_Q_MLP.sav",help="Path to classification model")
+parser.add_argument("--input", default="/pnfs/annie/persistent/users/mnieslon/ml_tutorial/mlp/classification_csv/beam_DigitThr10_MRDCluster_0_4996_Full.csv", help = "The input file containing the classification variables [csv-format]")
+parser.add_argument("--output", default="predictions_mlp_ringcounting_beam.csv", help = "The output file containing the predictions of the classifier")
+parser.add_argument("--variable_names", default="VariableConfig_Full_MRDCluster.txt", help = "File containing the list of classification variables")
+parser.add_argument("--model",default="models/RingClassification/ringcounting_model_tutorial_beam_Full_MRDCluster_MLP.sav",help="Path to classification model")
+
+#Use on data
+#parser.add_argument("--input", default="/annie/app/users/mnieslon/MyToolAnalysis6/classification_data/R1613S0p1_Full.csv", help = "The input file containing the classification variables [csv-format]")
+#parser.add_argument("--output", default="/annie/app/users/mnieslon/MyToolAnalysis6/R1613S0p1_ringcounting_predictions.txt", help = "The output file containing the predictions of the classifier")
+#parser.add_argument("--variable_names", default="VariableConfig_PMTOnly_Q.txt", help = "File containing the list of classification variables")
+#parser.add_argument("--model",default="models/ringcounting_model_beam_PMTOnly_Q_MLP.sav",help="Path to classification model")
 args = parser.parse_args()
 input_file = args.input
 output_file = args.output
