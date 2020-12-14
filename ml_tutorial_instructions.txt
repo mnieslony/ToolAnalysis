@@ -7,12 +7,12 @@ Authors: David Maksimovic, Michael Nieslony
 ///////////////////////////////////////////////
 -------------------------------------------
 
-//Get code from special branch (not everything in head branch yet, also current version of LoadANNIEEvent doesn’t work with old files)
+Get code from special branch (not everything in head branch yet + older version of LoadANNIEEvent needed)
 git remote add mnieslony https://github.com/mnieslony/ToolAnalysis.git
 git checkout -b ml_tutorial
 git pull mnieslony MLTutorial
 
-//Make the application
+Make the application
 make clean
 source Setup.sh [or] source SetupSingularity.sh
 make [or] make -f Makefile.Singularity
@@ -36,6 +36,13 @@ On MC:
 On data
 ./Analyse PrepareClassificationTrainingData
 
+In principle such csv-files can then be used as input for the training process. To make the training more efficient, we will use an already prepared bigger dataset for training our MLP PID classifier:
+* Electron dataset: 
+/pnfs/annie/persistent/users/mnieslon/ml_tutorial/mlp/classification_csv/beamlike_electrons_updatedMRD_DigitThr10_0_999_Full.csv
+* Muon dataset: 
+/pnfs/annie/persistent/users/mnieslon/ml_tutorial/mlp/classification_csv/beamlike_muons_updatedMRD_DigitThr10_0_399_Full.csv
+These are set as the default datasets in the train_classification_emu.py script that we are going to use.
+
 
 ///////////////////////////////
 Train an e/mu classifier:
@@ -44,7 +51,7 @@ Train an e/mu classifier:
 Find out what variables can be configured
 python3.6 train_classification_emu.py --help
 
-Train MLP classifier
+Train MLP classifier on the large dataset that was mentioned above
 python3.6 train_classification_emu.py
 
 
@@ -55,29 +62,14 @@ Predict with e/mu classifier:
 Find out which variables can be configured:
 python3.6 do_classification_emu.py --help
 
-Use trained model to predict events in beam dataset:
+Use trained model to predict events in separate beam dataset:
 python3.6 do_classification_emu.py
 
-////////////////////////////////////////
-Train a ring counting classifier:
-///////////////////////////////////////
+///////////////////////////////////////////////////
+Train & predict a ring counting classifier:
+///////////////////////////////////////////////////
 
-Find out which variables can be configured:
-python3.6 train_classification_rings.py --help
-
-Train MLP classifier
-python3.6 train_classification_rings.py
-
-///////////////////////////////////////////////
-Predict with ring counting classifier:
-///////////////////////////////////////////////
-
-Find out which variables can be configured:
-python3.6 do_classification_rings.py --help
-
-The following can not be used for evaluating the performance of the RingCounting classifier, since we already trained on this dataset. Just to demonstrate how to use the trained model on a dataset
-python3.6 do_classification_rings.py
-
+The same steps as for the PID classifier, but the scripts are called train_classification_rings.py and do_classification_rings.py. (You can try it out by yourself at home)
 
 ---------------------------------------------
 ///////////////////////////////////////////////
@@ -95,10 +87,36 @@ On MC:
 On data
 ./Analyse PrepareCNNImageData
 
+///////////////////////////////////////////
+Convert csv maps to pickle-maps
+///////////////////////////////////////////
+
+This python script combines the PMT event display with the LAPPD event displays (if desired) and saves the maps in a more suitable format for the network
+Check out the beginning of the code to see what can be configured:
+vi cnn_mapcreation_rc.py
+ 
+Configure python for the map creation process
+source SetupMapCreation.sh
+
+We will let it run on our previously created csv-file maps:
+python3.6 cnn_mapcreation_rc.py
+
+Have a look at one exemplary event:
+python3.6
+import pickle
+import matplotlib.pyplot as plt
+X=pickle.load(open("cnn_pickle/X.pickle","rb"))
+plt.imshow(X[1,:,:,0])    #Look at second event
+plt.savefig('exemplary_event.png')
+quit()
+eog exemplary_event.png
+
 
 ////////////////////////////////////////
 Train a ring counting classifier:
 ///////////////////////////////////////
+
+We will now train a network based on a larger dataset. The number of epochs will only be 2 for the sake of time. You will get a much better classification performance with more epochs.
 
 python3.6 cnn_network_creator.py
 
