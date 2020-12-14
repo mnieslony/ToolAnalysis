@@ -165,20 +165,20 @@ y_train2 = np.array(y_train).ravel() #Return a contiguous flattened 1-d array
 print("X_train.shape: ",X_train.shape," y_train2.shape: ",y_train2.shape, "X_test.shape: ",X_test.shape," y_test.shape: ",y_test.shape)
 
 
-#fig=[]
-#for plot in range(num_plots):
-#    if model_name != "All":
-#        fig.append(plt.figure(plot,figsize=(15,10)))
-#    else:
-#        fig.append(plt.figure(plot,figsize=(15,20)))
-#if model_name != "All":
-#    fig_roc = plt.figure(num_plots+1,figsize=(15,10))
-#    fig_pr = plt.figure(num_plots+2,figsize=(15,10))
-#    fig_trash = plt.figure(num_plots+3,figsize=(15,10))
-#else:
-#    fig_roc = plt.figure(num_plots+1,figsize=(15,20))
-#    fig_pr = plt.figure(num_plots+2,figsize=(15,20))
-#    fig_trash = plt.figure(num_plots+3,figsize=(15,20)) #trash image just so the rectangle is not painted on top of fig_pr or fig_roc
+fig=[]
+for plot in range(num_plots):
+    if model_name != "All":
+        fig.append(plt.figure(plot,figsize=(15,10)))
+    else:
+        fig.append(plt.figure(plot,figsize=(15,20)))
+if model_name != "All":
+    fig_roc = plt.figure(num_plots+1,figsize=(15,10))
+    fig_pr = plt.figure(num_plots+2,figsize=(15,10))
+    fig_trash = plt.figure(num_plots+3,figsize=(15,10))
+else:
+    fig_roc = plt.figure(num_plots+1,figsize=(15,20))
+    fig_pr = plt.figure(num_plots+2,figsize=(15,20))
+    fig_trash = plt.figure(num_plots+3,figsize=(15,20)) #trash image just so the rectangle is not painted on top of fig_pr or fig_roc
 
 
 # ------------------------------------------------------------------
