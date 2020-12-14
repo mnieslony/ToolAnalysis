@@ -22,8 +22,13 @@ import itertools
 
 ########### Load Data ###########
 #X=Trainingdata, Y=Labels
+#RingCounting dataset
 X= pickle.load(open("/pnfs/annie/persistent/users/dmaksimo/ml_tutorial/pickle/X_RC_PMT_110k_Files_mitTopBottom.pickle","rb"))
 Y= pickle.load(open("/pnfs/annie/persistent/users/dmaksimo/ml_tutorial/pickle/Y_RC_PMT_110k_Files_mitTopBottom.pickle","rb"))
+
+#Exemplary muon/electron PID files can be found at the following paths
+#X= pickle.load(open("/pnfs/annie/persistent/users/dmaksimo/ml_tutorial/pickle/X_PID_PMT_120k_Files_gn_tf.pickle","rb"))
+#Y= pickle.load(open("/pnfs/annie/persistent/users/dmaksimo/ml_tutorial/pickle/Y_PID_PMT_120k_Files_gn_tf.pickle","rb"))
 ##################################
 
 #CNN Network Paramters
@@ -36,8 +41,12 @@ filter_size = (3,3)    # Filter sizes
 b_s= 100               # batch_size
 ep = 2                 # epochs
 
+#RingCounting labels
 Label_1 = "Single-ring" #electron
 Label_2 = "Multi-ring"  #muon
+#Electron/Muon labels
+#Label_1 = "Electron"
+#Label_2 = "Muon"
 
 NAME ="CNN-{}-filter_size-{}-double_conv-{}-nodes-{}-dense".format(filter_size,conv_layer, layer_size, dense_layer)
 

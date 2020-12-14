@@ -22,6 +22,9 @@ from sklearn.metrics import confusion_matrix
 
 Label1="SR" #or Electron Y=[1,0]
 Label2="MR" # or Muon Y=[0,1]
+#Electron/muon labels
+#Label1="Electron"
+#Label2="Muon"
 MC=True
 
 
@@ -58,6 +61,7 @@ y_classes = y_prob.argmax(axis=-1)
 print("Prediction of Data successfull")
 
 file1 = open("CNN_RC_Beam_Prediction.txt","w")
+#file1 = open("CNN_PID_Beam_Prediction.txt","w")
 if MC == True:
 	rounded_labels =np.argmax(Y, axis=1)
 	cm = confusion_matrix(rounded_labels, y_classes)
