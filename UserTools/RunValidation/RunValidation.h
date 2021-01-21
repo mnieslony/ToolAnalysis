@@ -8,6 +8,7 @@
 #include "TH2D.h"
 #include "TFile.h"
 #include "TROOT.h"
+#include "TCanvas.h"
 
 #include "Tool.h"
 
@@ -31,21 +32,26 @@ class RunValidation: public Tool {
   bool Execute(); ///< Execute function used to perform Tool purpose.
   bool Finalise(); ///< Finalise function used to clean up resources.
 
+  void DefineHistograms();  ///< Define histograms for RunValidation tool
 
  private:
 
   //configuration variables
   int verbosity;
   std::string outfile_path;
+  std::string filename_suffix;
   bool invert_mrd_times;
   std::string singlePEgains;
   int user_runnumber;
   int user_subrunnumber;
   int user_runtype;
+  bool createImages;
+  std::string savePath; 
 
   //Data storing variables
   std::map<double,std::vector<Hit>>* m_all_clusters;  //from ClusterFinder tool
   std::map<double,std::vector<unsigned long>>* m_all_clusters_detkey;  //from ClusterFinder tool
+  std::map<double,double> ClusterChargeBalances;  //from ClusterClassifiers tool
   std::vector<std::vector<int>> MrdTimeClusters;  //from TimeClustering tool
   std::vector<double> MrdDigitTimes;  //from TimeClustering tool
   std::vector<unsigned long> mrddigitchankeysthisevent;  //from TimeClustering tool
@@ -67,8 +73,11 @@ class RunValidation: public Tool {
   bool first_entry;
   int n_pmt_mrd_time;
   int n_pmt_mrd_time_facc;
+  int n_pmt_mrd_time_nofacc;
 
   //RunStartTime variables
+  int RunNumber, SubRunNumber, RunType, EventNumber;
+  ULong64_t RunStartTime, EventTimeTank;
   ULong64_t start_time;
   ULong64_t current_time;
   int GlobalRunNumber;
@@ -77,6 +86,7 @@ class RunValidation: public Tool {
   //ROOT-related variables
   TFile *outfile = nullptr;
   TH1D *MRD_t_clusters = nullptr;
+  TH1D *MRD_t_clusters_cosmic = nullptr;
   TH1D *PMT_t_clusters = nullptr;
   TH1D *PMT_t_clusters_2pe = nullptr;
   TH1D *PMT_t_clusters_5pe = nullptr;
@@ -91,19 +101,36 @@ class RunValidation: public Tool {
   TH2D *MRD_PMT_t_100pe = nullptr;
   TH1D *MRD_PMT_Deltat = nullptr;
   TH1D *MRD_PMT_Deltat_100pe = nullptr;
+  TH1D *FMV_PMT_Deltat = nullptr;
+  TH1D *FMV_PMT_Deltat_100pe = nullptr;
+  TH1D *MRD_FMV_Deltat = nullptr;
   TH1D *PMT_prompt_charge = nullptr;
   TH1D *PMT_prompt_charge_10hits = nullptr;
   TH1D *PMT_prompt_charge_zoom = nullptr;
+  TH1D *PMT_prompt_charge_MRDCoinc = nullptr;
+  TH1D *PMT_prompt_charge_FMV = nullptr;
+  TH1D *PMT_prompt_charge_MRDCoinc_NoFMV = nullptr;
+  TH2D *PMT_prompt_charge_CB = nullptr;
   TH1D *PMT_chargeperpmt = nullptr;
   TH1D *PMT_chargeperpmt_100pe = nullptr;
   TH1D *PMT_delayed_charge = nullptr;
   TH1D *PMT_delayed_charge_10hits = nullptr;
   TH1D *PMT_delayed_charge_zoom = nullptr;
+  TH2D *PMT_delayed_charge_CB = nullptr;
+  TH1D *PMT_Channelkeys = nullptr;
+  TH1D *MRD_Channelkeys = nullptr;
+  TH1D *FMV_Channelkeys = nullptr;
   TH1D *ANNIE_counts = nullptr;
   TH1D *ANNIE_rates = nullptr;
   TH1D *ANNIE_fractions = nullptr;
-
-  //verbosity-related variables
+  TH1D *PMT_DelayedMult = nullptr;
+  TH1D *PMT_DelayedMult_Coinc = nullptr;
+  TH1D *PMT_DelayedMult_Coinc_NoFMV = nullptr;
+  TH1D *PMT_DelayedMult_Coinc_NoFMV_CB = nullptr;
+  TH1D *ADCWaveform_Samples = nullptr;
+  TH1D *Triggerwords = nullptr;
+ 
+ //verbosity-related variables
   int v_error = 0;
   int v_warning = 1;
   int v_message = 2;
