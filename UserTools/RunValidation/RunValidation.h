@@ -92,6 +92,16 @@ class RunValidation: public Tool {
   TH1D *PMT_t_clusters_5pe = nullptr;
   TH1D *PMT_t_clusters_10pe = nullptr;
   TH1D *PMT_t_clusters_30pe = nullptr;
+  TH1D *PMT_t_clusters_cosmics = nullptr;
+  TH1D *PMT_t_clusters_2pe_cosmics = nullptr;
+  TH1D *PMT_t_clusters_5pe_cosmics = nullptr;
+  TH1D *PMT_t_clusters_10pe_cosmics = nullptr;
+  TH1D *PMT_t_clusters_30pe_cosmics = nullptr;
+  TH1D *PMT_t_clusters_led = nullptr;
+  TH1D *PMT_t_clusters_2pe_led = nullptr;
+  TH1D *PMT_t_clusters_5pe_led = nullptr;
+  TH1D *PMT_t_clusters_10pe_led = nullptr;
+  TH1D *PMT_t_clusters_30pe_led = nullptr;
   TH1D *PMT_t_clusters_full = nullptr;
   TH1D *PMT_t_clusters_2pe_full = nullptr;
   TH1D *PMT_t_clusters_5pe_full = nullptr;
@@ -101,6 +111,10 @@ class RunValidation: public Tool {
   TH2D *MRD_PMT_t_100pe = nullptr;
   TH1D *MRD_PMT_Deltat = nullptr;
   TH1D *MRD_PMT_Deltat_100pe = nullptr;
+  TH2D *MRD_PMT_t_Cosmic = nullptr;
+  TH2D *MRD_PMT_t_100pe_Cosmic = nullptr;
+  TH1D *MRD_PMT_Deltat_Cosmic = nullptr;
+  TH1D *MRD_PMT_Deltat_100pe_Cosmic = nullptr;
   TH1D *FMV_PMT_Deltat = nullptr;
   TH1D *FMV_PMT_Deltat_100pe = nullptr;
   TH1D *MRD_FMV_Deltat = nullptr;
@@ -109,6 +123,9 @@ class RunValidation: public Tool {
   TH1D *PMT_prompt_charge_zoom = nullptr;
   TH1D *PMT_prompt_charge_MRDCoinc = nullptr;
   TH1D *PMT_prompt_charge_FMV = nullptr;
+  TH1D *PMT_prompt_charge_Beam = nullptr;
+  TH1D *PMT_prompt_charge_Cosmic = nullptr;
+  TH1D *PMT_prompt_charge_LED = nullptr;
   TH1D *PMT_prompt_charge_MRDCoinc_NoFMV = nullptr;
   TH2D *PMT_prompt_charge_CB = nullptr;
   TH1D *PMT_chargeperpmt = nullptr;
@@ -127,10 +144,24 @@ class RunValidation: public Tool {
   TH1D *PMT_DelayedMult_Coinc = nullptr;
   TH1D *PMT_DelayedMult_Coinc_NoFMV = nullptr;
   TH1D *PMT_DelayedMult_Coinc_NoFMV_CB = nullptr;
+  TH1D *PMT_DelayedTime = nullptr;
+  TH1D *PMT_DelayedTime_CB = nullptr;
+  TH1D *PMT_DelayedTime_Coinc = nullptr;
+  TH1D *PMT_DelayedTime_Coinc_NoFMV = nullptr;
+  TH1D *PMT_DelayedTime_Coinc_NoFMV_CB = nullptr;
   TH1D *ADCWaveform_Samples = nullptr;
   TH1D *Triggerwords = nullptr;
  
- //verbosity-related variables
+  //Canvas
+  TCanvas *canvas_beamspill = nullptr;
+  TCanvas *canvas_mrd_pmt = nullptr;
+  TCanvas *canvas_triggerwords = nullptr;
+  TCanvas *canvas_prompt_charge = nullptr;
+  TCanvas *canvas_neutron_mult = nullptr;
+  TCanvas *canvas_channelkey = nullptr;
+  TCanvas *canvas_rates = nullptr;
+
+  //verbosity-related variables
   int v_error = 0;
   int v_warning = 1;
   int v_message = 2;

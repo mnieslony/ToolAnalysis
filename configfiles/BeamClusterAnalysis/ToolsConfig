@@ -6,4 +6,5 @@ myTimeClustering TimeClustering configfiles/BeamClusterAnalysis/TimeClusteringCo
 myFindMrdTracks FindMrdTracks configfiles/BeamClusterAnalysis/FindMrdTracksConfig
 myClusterFinder ClusterFinder ./configfiles/BeamClusterAnalysis/ClusterFinderConfig
 myClusterClassifiers ClusterClassifiers ./configfiles/BeamClusterAnalysis/ClusterClassifiersConfig
+myEventSelector EventSelector ./configfiles/BeamClusterAnalysis/EventSelectorConfig
 myPhaseIITreeMaker PhaseIITreeMaker ./configfiles/BeamClusterAnalysis/PhaseIITreeMakerConfig

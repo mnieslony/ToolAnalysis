@@ -39,7 +39,7 @@ bool PhaseIITreeMaker::Initialise(std::string configfile, DataModel &data){
 
   auto get_geometry= m_data->Stores.at("ANNIEEvent")->Header->Get("AnnieGeometry",geom);
   if(!get_geometry){
-  	Log("DigitBuilder Tool: Error retrieving Geometry from ANNIEEvent!",v_error,verbosity); 
+  	Log("PhaseIITreeMaker Tool: Error retrieving Geometry from ANNIEEvent!",v_error,verbosity); 
   	return false; 
   }
  
@@ -62,6 +62,11 @@ bool PhaseIITreeMaker::Initialise(std::string configfile, DataModel &data){
     fPhaseIITankClusterTree->Branch("clusterChargePointZ",&fClusterChargePointZ,"clusterChargePointZ/D");
     fPhaseIITankClusterTree->Branch("clusterChargeBalance",&fClusterChargeBalance,"clusterChargeBalance/D");
     fPhaseIITankClusterTree->Branch("clusterHits",&fClusterHits,"clusterHits/i");
+    fPhaseIITankClusterTree->Branch("trigword",&fTriggerword);
+    fPhaseIITankClusterTree->Branch("TankMRDCoinc",&fTankMRDCoinc);
+    fPhaseIITankClusterTree->Branch("NoVeto",&fNoVeto);
+    fPhaseIITankClusterTree->Branch("ADCSamples",&fADCWaveformSamples);
+    fPhaseIITankClusterTree->Branch("ADCChankeys",&fADCWaveformChankeys);
     if(TankHitInfo_fill){
       fPhaseIITankClusterTree->Branch("filter",&fIsFiltered);
       fPhaseIITankClusterTree->Branch("hitX",&fHitX);
@@ -72,6 +77,7 @@ bool PhaseIITreeMaker::Initialise(std::string configfile, DataModel &data){
       fPhaseIITankClusterTree->Branch("hitPE",&fHitPE);
       fPhaseIITankClusterTree->Branch("hitType", &fHitType);
       fPhaseIITankClusterTree->Branch("hitDetID", &fHitDetID);
+      fPhaseIITankClusterTree->Branch("hitChankey",&fHitChankey);
     }
     //SiPM Pulse Info; load into both trees for now...
     if(SiPMPulseInfo_fill){
@@ -99,9 +105,16 @@ bool PhaseIITreeMaker::Initialise(std::string configfile, DataModel &data){
     fPhaseIIMRDClusterTree->Branch("clusterTime",&fMRDClusterTime,"clusterTime/D");
     fPhaseIIMRDClusterTree->Branch("clusterTimeSigma",&fMRDClusterTimeSigma,"clusterTimeSigma/D");
     fPhaseIIMRDClusterTree->Branch("clusterHits",&fMRDClusterHits,"clusterHits/i");
+    fPhaseIIMRDClusterTree->Branch("trigword",&fTriggerword);
+    fPhaseIIMRDClusterTree->Branch("TankMRDCoinc",&fTankMRDCoinc);
+    fPhaseIIMRDClusterTree->Branch("NoVeto",&fNoVeto);
     if(MRDHitInfo_fill){
       fPhaseIIMRDClusterTree->Branch("MRDhitT",&fMRDHitT);
       fPhaseIIMRDClusterTree->Branch("MRDhitDetID", &fMRDHitDetID);
+      fPhaseIIMRDClusterTree->Branch("MRDhitChankey", &fMRDHitChankey);
+      fPhaseIIMRDClusterTree->Branch("FMVhitT",&fFMVHitT);
+      fPhaseIIMRDClusterTree->Branch("FMVhitDetID",&fFMVHitDetID);
+      fPhaseIIMRDClusterTree->Branch("FMVhitChankey",&fFMVHitChankey);
       fPhaseIIMRDClusterTree->Branch("vetoHit",&fVetoHit,"vetoHit/I");
     }
     if(MRDReco_fill){
@@ -136,6 +149,12 @@ bool PhaseIITreeMaker::Initialise(std::string configfile, DataModel &data){
     fPhaseIITrigTree->Branch("eventTimeMRD",&fEventTimeMRD,"eventTimeMRD/l");
     fPhaseIITrigTree->Branch("nhits",&fNHits,"nhits/I");
 
+    //CTC & event selection related variables
+    fPhaseIITrigTree->Branch("trigword",&fTriggerword);
+    fPhaseIITrigTree->Branch("HasTank",&fHasTank);
+    fPhaseIITrigTree->Branch("HasMRD",&fHasMRD);
+    fPhaseIITrigTree->Branch("TankMRDCoinc",&fTankMRDCoinc);
+    fPhaseIITrigTree->Branch("NoVeto",&fNoVeto);
 
     //Event Staus Flag Information
     if(fillCleanEventsOnly){
@@ -167,6 +186,10 @@ bool PhaseIITreeMaker::Initialise(std::string configfile, DataModel &data){
     if(MRDHitInfo_fill){
       fPhaseIITrigTree->Branch("MRDhitT",&fMRDHitT);
       fPhaseIITrigTree->Branch("MRDhitDetID", &fMRDHitDetID);
+      fPhaseIITrigTree->Branch("MRDhitChankey", &fMRDHitChankey);
+      fPhaseIITrigTree->Branch("FMVhitT",&fFMVHitT);
+      fPhaseIITrigTree->Branch("FMVhitDetID",&fFMVHitDetID);
+      fPhaseIITrigTree->Branch("FMVhitChankey",&fFMVHitChankey);
       fPhaseIITrigTree->Branch("vetoHit",&fVetoHit,"vetoHit/I");
     }
     if(MRDReco_fill){
@@ -310,10 +333,16 @@ bool PhaseIITreeMaker::Execute(){
     //bool get_clusters = m_data->Stores.at("ANNIEEvent")->Get("ClusterMap",m_all_clusters);
     bool get_clusters = m_data->CStore.Get("ClusterMap",m_all_clusters);
     if(!get_clusters){
-      std::cout << "BeamClusterAnalysis tool: No clusters found!" << std::endl;
+      std::cout << "PhaseIITreeMaker tool: No clusters found!" << std::endl;
       return false;
     }
     Log("PhaseIITreeMaker Tool: Accessing pairs in all_clusters map",v_debug,verbosity);
+    get_clusters = m_data->CStore.Get("ClusterMapDetkey",m_all_clusters_detkeys);
+    if (!get_clusters){
+      std::cout <<"PhaseIITreeMaker tool: No cluster detkeys found!" << std::endl;
+      return false;
+    }
+
     int cluster_num = 0;
     for (std::pair<double,std::vector<Hit>>&& cluster_pair : *m_all_clusters) {
       Log("PhaseIITreeMaker Tool: Resetting variables prior to getting run level info",v_debug,verbosity);
@@ -330,6 +359,30 @@ bool PhaseIITreeMaker::Execute(){
       // ANNIE Event number
       m_data->Stores.at("ANNIEEvent")->Get("EventTimeTank",fEventTimeTank);
       m_data->Stores.at("ANNIEEvent")->Get("EventNumber",fEventNumber);
+      m_data->Stores.at("ANNIEEvent")->Get("Triggerword",fTriggerword);
+      m_data->Stores.at("RecoEvent")->Get("PMTMRDCoinc",fTankMRDCoinc);
+      m_data->Stores.at("RecoEvent")->Get("NoVeto",fNoVeto);
+
+      //Number of ADC samples
+      std::map<unsigned long, std::vector<Waveform<unsigned short>>> raw_waveform_map;
+      bool has_raw = m_data->Stores["ANNIEEvent"]->Get("RawADCData",raw_waveform_map);
+      if (!has_raw) {
+        Log("PhaseIITreeMaker tool: Did not find RawADCData in ANNIEEvent! Abort",v_error,verbosity);
+        /*return false;*/
+      }
+
+      if (has_raw){
+        for (auto& temp_pair : raw_waveform_map) {
+          const auto& achannel_key = temp_pair.first;
+          auto& araw_waveforms = temp_pair.second;
+          for (unsigned int i=0; i< araw_waveforms.size(); i++){
+            auto samples = araw_waveforms.at(i).GetSamples();
+            int size_sample = samples->size();
+            fADCWaveformChankeys.push_back(achannel_key);
+            fADCWaveformSamples.push_back(size_sample);
+          }
+        }
+      }
 
       std::vector<Hit> cluster_hits = cluster_pair.second;
       fClusterTime = cluster_pair.first;
@@ -352,22 +405,38 @@ bool PhaseIITreeMaker::Execute(){
   if(MRDClusterProcessing){
     Log("PhaseIITreeMaker Tool: Beginning MRD cluster processing",v_debug,verbosity);
 
-	bool get_clusters = m_data->CStore.Get("MrdTimeClusters",MrdTimeClusters);
+    std::cout <<"1"<<std::endl;
+    bool get_clusters = m_data->CStore.Get("MrdTimeClusters",MrdTimeClusters);
     if(!get_clusters){
-      std::cout << "BeamClusterAnalysis tool: No MRD clusters found! Did you run the TimeClustering tool?" << std::endl;
+      std::cout << "PhaseIITreeMaker tool: No MRD clusters found! Did you run the TimeClustering tool?" << std::endl;
       return false;
     }
 	
-	m_data->CStore.Get("MrdDigitTimes",mrddigittimesthisevent);
-	m_data->CStore.Get("MrdDigitPmts",mrddigitpmtsthisevent);
+    std::cout <<"2"<<std::endl;
+    int num_mrd_clusters;
+    m_data->CStore.Set("NumMrdTimeClusters",num_mrd_clusters);
+
+    std::cout <<"3"<<std::endl;
+    if (num_mrd_clusters > 0){
+      m_data->CStore.Get("MrdDigitTimes",mrddigittimesthisevent);
+      m_data->CStore.Get("MrdDigitPmts",mrddigitpmtsthisevent);
+      m_data->CStore.Get("MrdDigitChankeys",mrddigitchankeysthisevent);
+    }
+    std::cout <<"4"<<std::endl;
+    m_data->Stores.at("ANNIEEvent")->Get("TriggerWord",fTriggerword);
+    m_data->Stores.at("RecoEvent")->Get("PMTMRDCoinc",fTankMRDCoinc);
+    m_data->Stores.at("RecoEvent")->Get("NoVeto",fNoVeto);
+    std::cout <<"5"<<std::endl;
 
     //Check if there's a veto hit in the acquisition
     int TrigHasVetoHit = 0;
-    bool get_ok = m_data->Stores["ANNIEEvent"]->Get("TDCData",TDCData);  // a std::map<ChannelKey,vector<TDCHit>>
-    if (!get_ok){
+    bool has_tdc = m_data->Stores["ANNIEEvent"]->Get("TDCData",TDCData);  // a std::map<ChannelKey,vector<TDCHit>>
+    if (!has_tdc){
       std::cout << "No TDCData store in ANNIEEvent." << std::endl;
-      return false;
+      //return false;
     }
+    std::cout <<"6"<<std::endl;
+    if (has_tdc){
     if(TDCData->size()>0){
       Log("PhaseIITreeMaker tool: Looping over FACC/MRD hits... looking for Veto activity",v_debug,verbosity);
       for(auto&& anmrdpmt : (*TDCData)){
@@ -377,7 +446,9 @@ bool PhaseIITreeMaker::Execute(){
         if(thedetector->GetDetectorElement()=="Veto") TrigHasVetoHit=1; // this is a veto hit, not an MRD hit.
       }
     }
+    }
     
+    std::cout <<"7"<<std::endl;
     int cluster_num = 0;
     for (int i=0; i<MrdTimeClusters.size(); i++){
       Log("PhaseIITreeMaker Tool: Resetting variables prior to getting MRD cluster info",v_debug,verbosity);
@@ -385,9 +456,10 @@ bool PhaseIITreeMaker::Execute(){
       fMRDClusterHits = 0;
       fVetoHit = TrigHasVetoHit;
       std::vector<int> ThisClusterIndices = MrdTimeClusters.at(i);
-      for(int j=0;j<ThisClusterIndices.size(); j++){
+      for(int j=0;j < (int) ThisClusterIndices.size(); j++){
         fMRDHitT.push_back(mrddigittimesthisevent.at(ThisClusterIndices.at(j)));
         fMRDHitDetID.push_back(mrddigitpmtsthisevent.at(ThisClusterIndices.at(j)));
+        fMRDHitChankey.push_back(mrddigitchankeysthisevent.at(ThisClusterIndices.at(j)));
         fMRDClusterHits+=1;
       }
 
@@ -417,9 +489,13 @@ bool PhaseIITreeMaker::Execute(){
       cluster_num += 1;
     }
   }
+    std::cout <<"8"<<std::endl;
  
   if(TriggerProcessing) {
+
     Log("PhaseIITreeMaker Tool: Getting run level information from ANNIEEvent",v_debug,verbosity);
+    this->ResetVariables();
+
     m_data->Stores.at("ANNIEEvent")->Get("RunNumber",fRunNumber);
     m_data->Stores.at("ANNIEEvent")->Get("SubrunNumber",fSubrunNumber);
     m_data->Stores.at("ANNIEEvent")->Get("RunType",fRunType);
@@ -428,6 +504,14 @@ bool PhaseIITreeMaker::Execute(){
     // ANNIE Event number
     m_data->Stores.at("ANNIEEvent")->Get("EventNumber",fEventNumber);
     m_data->Stores.at("ANNIEEvent")->Get("EventTimeTank",fEventTimeTank);
+
+    m_data->Stores.at("ANNIEEvent")->Get("Triggerword",fTriggerword);
+    m_data->Stores.at("ANNIEEvent")->Get("DataStreams",fDataStreams);
+    m_data->Stores.at("RecoEvent")->Get("PMTMRDCoinc",fTankMRDCoinc);
+    m_data->Stores.at("RecoEvent")->Get("NoVeto",fNoVeto);
+
+    if (fDataStreams["Tank"]==1) fHasTank = 1;
+    if (fDataStreams["MRD"]==1) fHasMRD = 1;
 
     bool got_mrdtime = m_data->Stores.at("ANNIEEvent")->Get("EventTime",mrd_timestamp);
     if(got_mrdtime) fEventTimeMRD = static_cast<uint64_t>(mrd_timestamp->GetNs());
@@ -438,16 +522,16 @@ bool PhaseIITreeMaker::Execute(){
     }
     if(SiPMPulseInfo_fill) this->LoadSiPMHits();
 
-	if(MRDHitInfo_fill) this->LoadAllMRDHits();
+    if(MRDHitInfo_fill) this->LoadAllMRDHits();
 
     if(MRDReco_fill){
       fNumClusterTracks=0;
       bool get_clusters = m_data->CStore.Get("MrdTimeClusters",MrdTimeClusters);
       if(!get_clusters){
-        std::cout << "BeamClusterAnalysis tool: No MRD clusters found.  Will be no tracks." << std::endl;
+        std::cout << "PhaseIITreeMaker tool: No MRD clusters found.  Will be no tracks." << std::endl;
         return false;
       }
-      for(int i=0; i < MrdTimeClusters.size(); i++) fNumClusterTracks += this->LoadMRDTrackReco(i);
+      for(int i=0; i < (int) MrdTimeClusters.size(); i++) fNumClusterTracks += this->LoadMRDTrackReco(i);
     }
 
     bool got_reco = false;
@@ -468,12 +552,14 @@ bool PhaseIITreeMaker::Execute(){
 }
 
 bool PhaseIITreeMaker::Finalise(){
-	fOutput_tfile->cd();
-	fPhaseIITrigTree->Write();
-    fPhaseIIMRDClusterTree->Write();
-	fPhaseIITankClusterTree->Write();
-	fOutput_tfile->Close();
-	if(verbosity>0) cout<<"PhaseIITreeMaker exitting"<<endl;
+  
+  fOutput_tfile->cd();
+  fPhaseIITrigTree->Write();
+  fPhaseIIMRDClusterTree->Write();
+  fPhaseIITankClusterTree->Write();
+  fOutput_tfile->Close();
+  if(verbosity>0) cout<<"PhaseIITreeMaker exitting"<<endl;
+
   return true;
 }
 
@@ -484,6 +570,11 @@ void PhaseIITreeMaker::ResetVariables() {
   fNHits = -9999;
   fVetoHit = -9999;
   fEventTimeMRD = 9999;
+  fTriggerword = -1;
+  fTankMRDCoinc = -99999;
+  fNoVeto = -99999;
+  fHasTank = -99999;
+  fHasMRD = -99999;
 
   if(SiPMPulseInfo_fill){
     fSiPM1NPulses = -9999;
@@ -502,7 +593,9 @@ void PhaseIITreeMaker::ResetVariables() {
     fClusterChargeBalance = -9999;
     fClusterTime = -9999;
     fClusterCharge = -9999;
-    fClusterNumber = -9999; 
+    fClusterNumber = -9999;
+    fADCWaveformSamples.clear();
+    fADCWaveformChankeys.clear();
   } 
   if(MCTruth_fill){ 
     fMCEventNum = -9999;
@@ -579,6 +672,10 @@ void PhaseIITreeMaker::ResetVariables() {
   if(MRDHitInfo_fill){
     fMRDHitT.clear();
     fMRDHitDetID.clear();
+    fMRDHitChankey.clear();
+    fFMVHitT.clear();
+    fFMVHitDetID.clear();
+    fFMVHitChankey.clear();
   }
   if(MRDReco_fill){
     fMRDTrackAngle.clear();
@@ -606,6 +703,7 @@ void PhaseIITreeMaker::ResetVariables() {
     fHitPE.clear();
     fHitType.clear();
     fHitDetID.clear();
+    fHitChankey.clear();
   }
   
   if (muonTruthRecoDiff_fill){ 
@@ -737,11 +835,20 @@ void PhaseIITreeMaker::LoadAllMRDHits(){
       unsigned long chankey = anmrdpmt.first;
       Detector* thedetector = geom->ChannelToDetector(chankey);
       unsigned long detkey = thedetector->GetDetectorID();
-      if(thedetector->GetDetectorElement()=="Veto") fVetoHit=1; // this is a veto hit, not an MRD hit.
       std::vector<Hit> mrdhits = anmrdpmt.second;
-      for(int j = 0; j<mrdhits.size(); j++){
-        fMRDHitT.push_back(mrdhits.at(j).GetTime());
-        fMRDHitDetID.push_back(mrdhits.at(j).GetTubeId());
+      if(thedetector->GetDetectorElement()=="Veto") {
+        fVetoHit=1; // this is a veto hit, not an MRD hit.
+        for (int j = 0; j < (int) mrdhits.size(); j++){
+          fFMVHitT.push_back(mrdhits.at(j).GetTime());
+          fFMVHitDetID.push_back(mrdhits.at(j).GetTubeId());
+          fFMVHitChankey.push_back(chankey);
+        }
+      } else {
+        for(int j = 0; j<mrdhits.size(); j++){
+          fMRDHitT.push_back(mrdhits.at(j).GetTime());
+          fMRDHitDetID.push_back(mrdhits.at(j).GetTubeId());
+          fMRDHitChankey.push_back(chankey);
+        }
       }
     }
   }
@@ -838,6 +945,7 @@ void PhaseIITreeMaker::LoadAllTankHits() {
         fHitQ.push_back(hit_charge);
         fHitPE.push_back(hit_PE);
         fHitDetID.push_back(ahit.GetTubeId());
+        fHitChankey.push_back(channel_key);
         fHitType.push_back(RecoDigit::PMT8inch); // 0 For PMTs
       }
     }

@@ -10,3 +10,4 @@ PhotoDetectorConfiguration PMT_only
 LAPPDIDFile ./configfiles/VertexReco/PhaseIIRecoTruth/LAPPDIDs.txt
 DigitChargeThr 0
 ChankeyToPMTIDMap ./configfiles/EventDisplay/Data-RecoEvent/Chankey_WCSimID.dat
+SinglePEGains ./configfiles/EventDisplay/Data-ANNIEEvent/ChannelSPEGains_BeamRun20192020.csv

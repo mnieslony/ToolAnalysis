@@ -142,7 +142,8 @@ class LoadWCSim: public Tool {
 	std::map<unsigned long,int> Mrd_Chankey_Layer;
 	bool mrd_firstlayer, mrd_lastlayer;
 	std::string Triggertype;
-	
+	int TriggerWord;	
+
 	// verbosity levels: if 'verbosity' < this level, the message type will be logged.
 	int v_error=0;
 	int v_warning=1;

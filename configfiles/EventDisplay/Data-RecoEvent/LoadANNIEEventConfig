@@ -1,3 +1,4 @@
 verbose 4
 EventOffset 0
 FileForListOfInputs ./configfiles/EventDisplay/Data-RecoEvent/my_inputs.txt
+GlobalEvNr 1

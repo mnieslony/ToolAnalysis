@@ -40,6 +40,7 @@ bool EventSelector::Initialise(std::string configfile, DataModel &data){
   m_variables.Get("PMTMRDOffset",fPMTMRDOffset);
   m_variables.Get("NoVeto",fNoVetoCut);
   m_variables.Get("Veto",fVetoCut);
+  m_variables.Get("TriggerWord",fTriggerWord);
   m_variables.Get("SaveStatusToStore", fSaveStatusToStore);
   m_variables.Get("IsMC",fIsMC);
 
@@ -94,43 +95,49 @@ bool EventSelector::Execute(){
   }
 
   // Retrive digits from RecoEvent
-  auto get_ok = m_data->Stores.at("RecoEvent")->Get("RecoDigit",fDigitList);  ///> Get digits from "RecoEvent" 
-  if(not get_ok){
+  auto has_reco = m_data->Stores.at("RecoEvent")->Get("RecoDigit",fDigitList);  ///> Get digits from "RecoEvent" 
+  if(not has_reco){
   	Log("EventSelector  Tool: Error retrieving RecoDigits,no digit from the RecoEvent!",v_error,verbosity); 
-  	return false;
+  	/*return false;*/
   }
 
   // BEGIN CUTS USING TRUTH INFORMATION //
 
+  bool get_truevtx, get_truestopvtx;
   if (fIsMC){
     // get truth vertex information 
-    auto get_truevtx = m_data->Stores.at("RecoEvent")->Get("TrueVertex", fMuonStartVertex);
+    get_truevtx = m_data->Stores.at("RecoEvent")->Get("TrueVertex", fMuonStartVertex);
     if(!get_truevtx){ 
       Log("EventSelector Tool: Error retrieving TrueVertex from RecoEvent!",v_error,verbosity); 
       return false; 
     }
   
-    auto get_truestopvtx = m_data->Stores.at("RecoEvent")->Get("TrueStopVertex", fMuonStopVertex);
+    get_truestopvtx = m_data->Stores.at("RecoEvent")->Get("TrueStopVertex", fMuonStopVertex);
     if(!get_truestopvtx){ 
       Log("EventSelector Tool: Error retrieving TrueStopVertex from RecoEvent!",v_error,verbosity); 
       return false; 
     }
    
     //Get MC version of MRD hits
-    bool get_mrd = m_data->Stores.at("ANNIEEvent")->Get("TDCData",TDCData_MC);
+    get_mrd = m_data->Stores.at("ANNIEEvent")->Get("TDCData",TDCData_MC);
     if (!get_mrd) {
       Log("EventSelector Tool: Error retrieving TDCData, true from ANNIEEvent!",v_error,verbosity);
-      return false;
     }
   } else {
   
     //Get data version of MRD hits
-    bool get_mrd = m_data->Stores.at("ANNIEEvent")->Get("TDCData",TDCData);
+    get_mrd = m_data->Stores.at("ANNIEEvent")->Get("TDCData",TDCData);
     if (!get_mrd) {
       Log("EventSelector Tool: Error retrieving TDCData, true from ANNIEEvent!",v_error,verbosity);
-      return false;
     }
 
+  }
+
+  int fTrigger;
+  auto get_trigger = m_data->Stores.at("ANNIEEvent")->Get("TriggerWord",fTrigger);
+  if (not get_trigger){
+      Log("EventSelector Tool: Error retrieving Triggerword, true from ANNIEEvent!",v_error,verbosity);
+      return false;
   }
 
   bool IsSingleRing = false, IsMultiRing = false, HasProjectedMRDHit = false, passNoPiK = false, passMCFVCut = false, passMCPMTCut = false, passMCMRDCut = false, IsInsideEnergyWindow = false, IsElectron = false, IsMuon = false, isPromptTrigger=false;
@@ -171,15 +178,20 @@ bool EventSelector::Execute(){
     m_data->Stores.at("RecoEvent")->Set("MCIsElectron",IsElectron);
   }
 
-
-  bool HasEnoughHits = this->NHitCountCheck(fNHitmin);
-  m_data->Stores.at("RecoEvent")->Set("NHitCut",HasEnoughHits);  
+  bool HasEnoughHits = false;
+  if (has_reco){
+    HasEnoughHits = this->NHitCountCheck(fNHitmin);
+    m_data->Stores.at("RecoEvent")->Set("NHitCut",HasEnoughHits);  
+  }
 
   bool passPMTMRDCoincCut = this->EventSelectionByPMTMRDCoinc();
   m_data->Stores.at("RecoEvent")->Set("PMTMRDCoinc",passPMTMRDCoincCut);
 
   bool passVetoCut = this->EventSelectionByVetoCut();
   m_data->Stores.at("RecoEvent")->Set("NoVeto",passVetoCut);
+
+  bool passTriggerCut = this->EventSelectionByTrigger(fTrigger,fTriggerWord);
+  m_data->Stores.at("RecoEvent")->Set("TriggerCut",passTriggerCut);
 
   // Fill the EventSelection mask for the cuts that are supposed to be applied
   if (fMCPiKCut){
@@ -287,6 +299,11 @@ bool EventSelector::Execute(){
   if (fVetoCut){
     fEventApplied |= EventSelector::kFlagVeto;
     if (passVetoCut) fEventFlagged |= EventSelector::kFlagVeto;
+  }
+
+  if (fTriggerWord > 0){
+    fEventApplied |= EventSelector::kFlagTrigger;
+    if (!passTriggerCut) fEventFlagged |= EventSelector::kFlagTrigger;
   }
   
   if(fEventFlagged != EventSelector::kFlagNone) fEventCutStatus = false;
@@ -665,8 +682,8 @@ bool EventSelector::EventSelectionByPMTMRDCoinc() {
     if (MrdTimeClusters.size() == 0 || m_all_clusters->size() == 0) return false;
   }
 
-  double pmtmrd_coinc_min = fPMTMRDOffset - 50;
-  double pmtmrd_coinc_max = fPMTMRDOffset + 50;
+  pmtmrd_coinc_min = fPMTMRDOffset - 50;
+  pmtmrd_coinc_max = fPMTMRDOffset + 50;
 
   bool coincidence = false;
   for (int i_mrd = 0; i_mrd < int(mrd_meantimes.size()); i_mrd++){
@@ -686,6 +703,7 @@ bool EventSelector::EventSelectionByVetoCut(){
 
  bool has_veto = false;
  if (fIsMC) {
+    if (get_mrd){
     if(TDCData_MC){
     if (TDCData_MC->size()==0){
       Log("EventSelector tool: TDC data is empty in this event.",v_message,verbosity);
@@ -694,14 +712,25 @@ bool EventSelector::EventSelectionByVetoCut(){
         unsigned long chankey = anmrdpmt.first;
         Detector* thedetector = fGeometry->ChannelToDetector(chankey);
         unsigned long detkey = thedetector->GetDetectorID();
-        if (thedetector->GetDetectorElement()=="Veto") has_veto = true;
+        if (thedetector->GetDetectorElement()=="Veto") {
+          std::vector<MCHit> fmv_hits = anmrdpmt.second;
+          for (int i_hit=0; i_hit < fmv_hits.size(); i_hit++){
+            MCHit fmv_hit = fmv_hits.at(i_hit);
+            double time_diff = fmv_hit.GetTime()-pmt_time;
+            if (time_diff > (pmtmrd_coinc_min) && time_diff < (pmtmrd_coinc_max)){
+              has_veto = true;
+           }
+          }
+        }
       }
     }
   } else {
     Log("EventSelector tool: No TDC data available in this event.",v_message,verbosity);
   }
  }
+}
 else {
+  if (get_mrd){
   if(TDCData){
     if (TDCData->size()==0){
       Log("EventSelector tool: TDC data is empty in this event.",v_message,verbosity);
@@ -710,15 +739,34 @@ else {
         unsigned long chankey = anmrdpmt.first;
         Detector* thedetector = fGeometry->ChannelToDetector(chankey);
         unsigned long detkey = thedetector->GetDetectorID();
-        if (thedetector->GetDetectorElement()=="Veto") has_veto = true;
+        if (thedetector->GetDetectorElement()=="Veto") {
+          std::vector<Hit> fmv_hits = anmrdpmt.second;
+          for (int i_hit=0; i_hit < fmv_hits.size(); i_hit++){
+            Hit fmv_hit = fmv_hits.at(i_hit);
+            double time_diff = fmv_hit.GetTime()-pmt_time;
+            if (time_diff > (pmtmrd_coinc_min+50) && time_diff < (pmtmrd_coinc_max+50)){
+              has_veto = true;
+           }
+          }
+        }
       }
     }
   } else {
     Log("EventSelector tool: No TDC data available in this event.",v_message,verbosity);
   }
   }
+  }
 
   return (!has_veto);	//Successful selection means no veto hit 
+
+}
+
+bool EventSelector::EventSelectionByTrigger(int current_trigger, int reference_trigger){
+
+  bool correct_triggerword = false;
+  if (reference_trigger == current_trigger) correct_triggerword = true;
+  std::cout <<"current_trigger: "<<current_trigger<<", reference trigger: "<<reference_trigger<<", correct_trigger: "<<correct_triggerword<<std::endl;
+  return correct_triggerword;
 
 }
 

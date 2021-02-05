@@ -17,6 +17,9 @@ bool LoadANNIEEvent::Initialise(std::string config_filename, DataModel &data) {
 
   m_variables.Get("verbose", verbosity_);
   m_variables.Get("EventOffset", offset_evnum);
+  m_variables.Get("GlobalEvNr",global_evnr);
+
+  global_ev = offset_evnum;
 
   std::string input_list_filename;
   bool got_input_file_list = m_variables.Get("FileForListOfInputs",
@@ -64,6 +67,10 @@ bool LoadANNIEEvent::Execute() {
       auto* annie_event = m_data->Stores.at("ANNIEEvent");
       if (annie_event) delete annie_event;
     }
+/*
+    if (m_data->Stores.count("ANNIEEvent")){
+    m_data->Stores["ANNIEEvent"]->Close();
+    }*/
 
     // Create a new ANNIEEvent Store
     m_data->Stores["ANNIEEvent"] = new BoostStore(false,
@@ -95,7 +102,10 @@ bool LoadANNIEEvent::Execute() {
 
   m_data->Stores["ANNIEEvent"]->GetEntry(current_entry_);  
   ++current_entry_;
-  
+ 
+  if (global_evnr) m_data->Stores["ANNIEEvent"]->Set("EventNumber",global_ev);
+  global_ev++; 
+
   if ( current_entry_ >= total_entries_in_file_ ) {
     ++current_file_;
     if ( current_file_ >= input_filenames_.size() ) {

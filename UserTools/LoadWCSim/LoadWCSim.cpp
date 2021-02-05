@@ -63,6 +63,11 @@ bool LoadWCSim::Initialise(std::string configfile, DataModel &data){
 		Log("LoadWCSim Tool: No Triggertype specified. Assuming TriggerType = Beam",v_warning,verbosity);
 		Triggertype = "Beam";	//other options: Cosmic / No Loopback
 	}
+	get_ok = m_variables.Get("TriggerWord",TriggerWord);
+	if (not get_ok){
+		Log("LoadWCSim Tool: No Triggerword specified. Assuming TriggerWord = 5 (Beam)",v_warning,verbosity);
+		TriggerWord = 5;
+	}
 	MCEventNum=0;
 	get_ok = m_variables.Get("FileStartOffset",MCEventNum);
 	
@@ -710,7 +715,8 @@ bool LoadWCSim::Execute(){
 	if (mrd_lastlayer && mrd_firstlayer) Triggertype = "Cosmic";
 	m_data->Stores.at("ANNIEEvent")->Set("MRDTriggerType",Triggertype);
 	m_data->Stores.at("ANNIEEvent")->Set("PrimaryMuonIndex",primarymuonindex);
-	
+	m_data->Stores.AT("ANNIEEvent")->Set("TriggerWord",TriggerWord);	
+
 	//Things that need to be set by later tools:
 	//RawADCData
 	//CalibratedADCData

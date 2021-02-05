@@ -1,0 +1,7 @@
+# RunValidationStability config file
+
+verbosity 2
+InputDirectory ./RunValidationFiles
+output_file RunValidationStability
+CurrentRun 2295
+NumberOfRuns 700

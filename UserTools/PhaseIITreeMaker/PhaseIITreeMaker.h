@@ -67,6 +67,7 @@ class PhaseIITreeMaker: public Tool {
   TTree* fPhaseIIMRDClusterTree = nullptr;
  
   std::map<double,std::vector<Hit>>* m_all_clusters = nullptr;  
+  std::map<double,std::vector<unsigned long>>* m_all_clusters_detkeys = nullptr;  
   Geometry *geom = nullptr;
 
   /// \brief Branch variables
@@ -104,11 +105,16 @@ class PhaseIITreeMaker: public Tool {
   std::vector<double> fHitPE; 
   std::vector<int> fHitType;
   std::vector<int> fHitDetID;
+  std::vector<int> fHitChankey;
 
   // MRD hit info 
   int fVetoHit;
   std::vector<double> fMRDHitT;
   std::vector<int> fMRDHitDetID;
+  std::vector<int> fMRDHitChankey;
+  std::vector<double> fFMVHitT;
+  std::vector<int> fFMVHitDetID;
+  std::vector<int> fFMVHitChankey;
   std::map<unsigned long,vector<Hit>>* TDCData=nullptr;
 
   // ************** MRD Cluster level information ********** //
@@ -119,6 +125,7 @@ class PhaseIITreeMaker: public Tool {
   // Cluster properties
   std::vector<double> mrddigittimesthisevent;
   std::vector<int> mrddigitpmtsthisevent;
+  std::vector<int> mrddigitchankeysthisevent;
   std::vector<std::vector<int>> MrdTimeClusters;
   
   // ************** Tank Cluster level information ********** //
@@ -136,7 +143,9 @@ class PhaseIITreeMaker: public Tool {
   double fClusterChargePointY;
   double fClusterChargePointZ;
   double fClusterChargeBalance;
- 
+  std::vector<int> fADCWaveformChankeys; 
+  std::vector<int> fADCWaveformSamples;  
+
   // ************ Muon reconstruction level information ******** //
   std::string MRDTriggertype;
   std::vector<BoostStore>* theMrdTracks;   // the reconstructed tracks
@@ -155,6 +164,14 @@ class PhaseIITreeMaker: public Tool {
   std::vector<double> fMRDTrackStopY;
   std::vector<double> fMRDTrackStopZ;
   
+  // Trigger-level information
+  std::map<std::string,bool> fDataStreams;
+  int fTriggerword;
+  int fTankMRDCoinc;
+  int fNoVeto;
+  int fHasTank;
+  int fHasMRD;
+
   // ************ MC Truth Information **************** //
   uint64_t fMCEventNum;
   uint16_t fMCTriggerNum;

@@ -30,6 +30,10 @@ class LoadANNIEEvent: public Tool {
     /// the output
     int verbosity_;
 
+    /// @brief Variables to count global event numbers over multiple files
+    bool global_evnr = false;
+    uint32_t global_ev;
+
     /// @brief Vector of filenames for each of the input files
     std::vector<std::string> input_filenames_;
 

@@ -12,6 +12,8 @@ bool RunValidation::Initialise(std::string configfile, DataModel &data){
   m_data= &data; //assigning transient data pointer
   /////////////////////////////////////////////////////////////////
 
+  createImages = false;
+
   m_variables.Get("verbosity",verbosity);
   m_variables.Get("OutputPath",outfile_path);
   m_variables.Get("InvertMRDTimes",invert_mrd_times); 
@@ -75,9 +77,9 @@ bool RunValidation::Execute(){
 
   int get_ok;
   bool has_clusters = m_data->CStore.Get("ClusterMap",m_all_clusters);
-  if (not get_ok) { Log("RunValidation Tool: Error retrieving ClusterMap from CStore, did you run ClusterFinder beforehand?",v_error,verbosity);/* return false; */}
-  get_ok = m_data->CStore.Get("ClusterMapDetkey",m_all_clusters_detkey);
-  if (not get_ok) { Log("RunValidation Tool: Error retrieving ClusterMapDetkey from CStore, did you run ClusterFinder beforehand?",v_error,verbosity);/* return false;*/ }
+  if (not has_clusters) { Log("RunValidation Tool: Error retrieving ClusterMap from CStore, did you run ClusterFinder beforehand?",v_error,verbosity);/* return false; */}
+  has_clusters = m_data->CStore.Get("ClusterMapDetkey",m_all_clusters_detkey);
+  if (not has_clusters) { Log("RunValidation Tool: Error retrieving ClusterMapDetkey from CStore, did you run ClusterFinder beforehand?",v_error,verbosity);/* return false;*/ }
 
   // Get ClusterClassifiers-related objects
   get_ok = m_data->Stores["ANNIEEvent"]->Get("ClusterChargeBalances", ClusterChargeBalances);
@@ -151,7 +153,7 @@ bool RunValidation::Execute(){
   get_ok = m_data->Stores["ANNIEEvent"]->Get("MRDTriggerType",MrdTriggerType);
   if (!get_ok) {
     Log("RunValidation tool: Did not find MRDTriggerType in ANNIEEvent! Abort",v_error,verbosity);
-    return false;
+    /*return false;*/	//Some events don't have MRD data -> ok
   }
   if (MrdTriggerType == "Cosmic") std::cout <<"Cosmic MRD trigger at event "<<EventNumber<<std::endl;
 
@@ -164,28 +166,6 @@ bool RunValidation::Execute(){
 
 
   std::cout <<"triggerword: "<<triggerword<<std::endl;
-
-  std::map<unsigned long, std::vector<Waveform<unsigned short>>> raw_waveform_map;
-  bool has_raw = m_data->Stores["ANNIEEvent"]->Get("RawADCData",raw_waveform_map);
-  if (!has_raw) {
-    Log("RunValidation tool: Did not find RawADCData in ANNIEEvent! Abort",v_error,verbosity);
-    /*return false;*/
-  }  
- 
-  std::cout <<raw_waveform_map.size()<<std::endl; 
-  //std::cout <<"raw waveforms"<<std::endl;
-  if (has_raw){
-/*    for (const auto& temp_pair : raw_waveform_map) {
-    const auto& achannel_key = temp_pair.first;
-    const auto& araw_waveforms = temp_pair.second;
-    //std::cout <<araw_waveforms.size()<<std::endl;
-    for (unsigned int i=0; i< araw_waveforms.size(); i++){
-      //std::cout <<"i: "<<i<<std::endl;
-      ADCWaveform_Samples->Fill(araw_waveforms.at(i).Samples().size());
-    }
-    }*/
-  }
-  std::cout <<"done with raw waveforms"<<std::endl;
 
   //-------------------------------------------------------------------------
   //--------------------- Initialise histograms------------------------------
@@ -206,6 +186,31 @@ bool RunValidation::Execute(){
   int n_delayed_clusters_CB = 0;
   bool coincident_tank_veto = false;
   bool coincident_mrd_veto = false;
+  std::vector<double> delayed_clusters_times;
+  std::vector<double> delayed_clusters_times_CB;  
+
+  //-------------------------------------------------------------------------
+  //--------------------- Fill size of raw waveforms-------------------------
+  //-------------------------------------------------------------------------
+
+  std::map<unsigned long, std::vector<Waveform<unsigned short>>> raw_waveform_map;
+  bool has_raw = m_data->Stores["ANNIEEvent"]->Get("RawADCData",raw_waveform_map);
+  if (!has_raw) {
+    Log("RunValidation tool: Did not find RawADCData in ANNIEEvent! Abort",v_error,verbosity);
+    /*return false;*/
+  }
+
+  if (has_raw){
+    for (auto& temp_pair : raw_waveform_map) {
+      const auto& achannel_key = temp_pair.first;
+      auto& araw_waveforms = temp_pair.second;
+      for (unsigned int i=0; i< araw_waveforms.size(); i++){
+        auto samples = araw_waveforms.at(i).GetSamples();
+        int size_sample = samples->size();
+        ADCWaveform_Samples->Fill(size_sample);
+      }
+    }
+  }
 
   //-------------------------------------------------------------------------
   //----------------Fill cluster time histograms-----------------------------
@@ -227,7 +232,13 @@ bool RunValidation::Execute(){
         double charge_balance = ClusterChargeBalances.at(cluster_time);
         if (cluster_time > 12000){
           n_delayed_clusters++; //count delayed clusters in window 12us ... 67us
-          if (charge_balance < 0.4) n_delayed_clusters_CB++;
+          delayed_clusters_times.push_back(cluster_time);
+          PMT_DelayedTime->Fill(cluster_time); 
+          if (charge_balance < 0.4) {
+            n_delayed_clusters_CB++;
+            delayed_clusters_times_CB.push_back(cluster_time);
+            PMT_DelayedTime_CB->Fill(cluster_time);
+          }
         }
         double global_time=0.;
         double global_charge=0.;
@@ -238,17 +249,25 @@ bool RunValidation::Execute(){
           double time = Hits.at(i_hit).GetTime();
           double charge = Hits.at(i_hit).GetCharge()/pmt_gains[detkey];
           if (charge > 2) {
-            PMT_t_clusters_2pe->Fill(time);
+            if (triggerword == 5) PMT_t_clusters_2pe->Fill(time);
+            else if (triggerword == 36) PMT_t_clusters_2pe_cosmics->Fill(time);
+            else if (triggerword == 31) PMT_t_clusters_2pe_led->Fill(time);
    	    PMT_Channelkeys->Fill(detkey);	//Only fill channelkey histogram for hits above 2p.e.         
             if (time < 10080 || time > 10400) PMT_t_clusters_2pe_full->Fill(time);
             if (charge > 5) {
-              PMT_t_clusters_5pe->Fill(time);
+              if (triggerword == 5) PMT_t_clusters_5pe->Fill(time);
+              else if (triggerword == 36) PMT_t_clusters_5pe_cosmics->Fill(time);
+              else if (triggerword == 31) PMT_t_clusters_5pe_led->Fill(time);
               if (time < 10080 || time > 10400) PMT_t_clusters_5pe_full->Fill(time);
               if (charge > 10) {
                 if (time < 10080 || time > 10400) PMT_t_clusters_10pe_full->Fill(time);
-                PMT_t_clusters_10pe->Fill(time);
+                if (triggerword == 5) PMT_t_clusters_10pe->Fill(time);
+                else if (triggerword == 36) PMT_t_clusters_10pe_cosmics->Fill(time);
+                else if (triggerword == 31) PMT_t_clusters_10pe_led->Fill(time);
                 if (charge > 30) {
-                  PMT_t_clusters_30pe->Fill(time);
+                  if (triggerword == 5) PMT_t_clusters_30pe->Fill(time);
+                  else if (triggerword == 36) PMT_t_clusters_30pe_cosmics->Fill(time);
+                  else if (triggerword == 31) PMT_t_clusters_30pe_led->Fill(time);
                   if (time < 10080 || time > 10400) PMT_t_clusters_30pe_full->Fill(time);
                 }
               }
@@ -259,7 +278,9 @@ bool RunValidation::Execute(){
           nhits++;
           if (time < 10080 || time > 10400) PMT_t_clusters_full->Fill(time);
           if (time < 2000.) {
-            PMT_t_clusters->Fill(time);
+            if (triggerword == 5) PMT_t_clusters->Fill(time);
+            else if (triggerword == 36) PMT_t_clusters_cosmics->Fill(time);
+            else if (triggerword == 31) PMT_t_clusters_led->Fill(time);
           }
         }
 	
@@ -271,6 +292,9 @@ bool RunValidation::Execute(){
         if (global_time < 2000.) {
           PMT_prompt_charge->Fill(global_charge);
           PMT_prompt_charge_zoom->Fill(global_charge);
+          if (triggerword == 5) PMT_prompt_charge_Beam->Fill(global_charge);
+          else if (triggerword == 31) PMT_prompt_charge_LED->Fill(global_charge);
+          else if (triggerword == 36) PMT_prompt_charge_Cosmic->Fill(global_charge);
           if (nhits>=10) PMT_prompt_charge_10hits->Fill(global_charge);
           PMT_chargeperpmt->Fill(global_chargeperpmt);
           if (global_charge>100) PMT_chargeperpmt_100pe->Fill(global_chargeperpmt);
@@ -383,12 +407,22 @@ bool RunValidation::Execute(){
   if (n_mrd_hits>0 && n_pmt_hits>0){
     for (int i_cluster=0; i_cluster < mrd_cluster_times.size(); i_cluster++){
     double i_mrd_time = mrd_cluster_times.at(i_cluster);
-    MRD_PMT_t->Fill(i_mrd_time,PMT_prompt_time);
-    MRD_PMT_Deltat->Fill(i_mrd_time-PMT_prompt_time);
+    if (triggerword == 5){
+      MRD_PMT_t->Fill(i_mrd_time,PMT_prompt_time);
+      MRD_PMT_Deltat->Fill(i_mrd_time-PMT_prompt_time);
+    } else if (triggerword == 36){
+      MRD_PMT_t_Cosmic->Fill(i_mrd_time,PMT_prompt_time);
+      MRD_PMT_Deltat_Cosmic->Fill(i_mrd_time-PMT_prompt_time);
+    }
     if ((i_mrd_time-PMT_prompt_time)>700 && (i_mrd_time-PMT_prompt_time)<800) pmt_mrd_time_coinc = true;
     if (max_charge_pe > 100){
-      MRD_PMT_t_100pe->Fill(i_mrd_time,PMT_prompt_time);
-      MRD_PMT_Deltat_100pe->Fill(i_mrd_time-PMT_prompt_time);
+      if (triggerword == 5){
+        MRD_PMT_t_100pe->Fill(i_mrd_time,PMT_prompt_time);
+        MRD_PMT_Deltat_100pe->Fill(i_mrd_time-PMT_prompt_time);
+      } else if (triggerword == 36){
+        MRD_PMT_t_100pe_Cosmic->Fill(i_mrd_time,PMT_prompt_time);
+        MRD_PMT_Deltat_100pe_Cosmic->Fill(i_mrd_time-PMT_prompt_time);
+      }
     }
     }
     coincident_tank_mrd = true;
@@ -407,12 +441,21 @@ bool RunValidation::Execute(){
     n_pmt_mrd_time++;
     PMT_DelayedMult_Coinc->Fill(n_delayed_clusters);
     PMT_prompt_charge_MRDCoinc->Fill(max_charge_pe);
+    for (int i_del=0; i_del< delayed_clusters_times.size(); i_del++){
+      PMT_DelayedTime_Coinc->Fill(delayed_clusters_times.at(i_del));
+    }
   }
   if (pmt_mrd_time_coinc && !facc_hit){
     PMT_DelayedMult_Coinc_NoFMV->Fill(n_delayed_clusters);
     PMT_DelayedMult_Coinc_NoFMV_CB->Fill(n_delayed_clusters_CB);
     PMT_prompt_charge_MRDCoinc_NoFMV->Fill(max_charge_pe);
     n_pmt_mrd_time_nofacc++;
+    for (int i_del=0; i_del< delayed_clusters_times.size(); i_del++){
+      PMT_DelayedTime_Coinc_NoFMV->Fill(delayed_clusters_times.at(i_del));
+    }
+    for (int i_del=0; i_del< delayed_clusters_times_CB.size(); i_del++){
+      PMT_DelayedTime_Coinc_NoFMV_CB->Fill(delayed_clusters_times_CB.at(i_del));
+    }
   }
   if (pmt_mrd_time_coinc && facc_hit) n_pmt_mrd_time_facc++;
   if (facc_hit) n_facc++;
@@ -562,6 +605,16 @@ bool RunValidation::Finalise(){
   PMT_t_clusters_5pe->Write();
   PMT_t_clusters_10pe->Write();
   PMT_t_clusters_30pe->Write();
+  PMT_t_clusters_cosmics->Write();
+  PMT_t_clusters_2pe_cosmics->Write();
+  PMT_t_clusters_5pe_cosmics->Write();
+  PMT_t_clusters_10pe_cosmics->Write();
+  PMT_t_clusters_30pe_cosmics->Write();
+  PMT_t_clusters_led->Write();
+  PMT_t_clusters_2pe_led->Write();
+  PMT_t_clusters_5pe_led->Write();
+  PMT_t_clusters_10pe_led->Write();
+  PMT_t_clusters_30pe_led->Write();
   PMT_t_clusters_full->Write();
   PMT_t_clusters_2pe_full->Write();
   PMT_t_clusters_5pe_full->Write();
@@ -571,6 +624,10 @@ bool RunValidation::Finalise(){
   MRD_PMT_t_100pe->Write();
   MRD_PMT_Deltat->Write();
   MRD_PMT_Deltat_100pe->Write();
+  MRD_PMT_t_Cosmic->Write();
+  MRD_PMT_t_100pe_Cosmic->Write();
+  MRD_PMT_Deltat_Cosmic->Write();
+  MRD_PMT_Deltat_100pe_Cosmic->Write();
   FMV_PMT_Deltat->Write();
   FMV_PMT_Deltat_100pe->Write();
   MRD_FMV_Deltat->Write();
@@ -578,12 +635,20 @@ bool RunValidation::Finalise(){
   PMT_DelayedMult_Coinc->Write();
   PMT_DelayedMult_Coinc_NoFMV->Write();
   PMT_DelayedMult_Coinc_NoFMV_CB->Write();
+  PMT_DelayedTime->Write();
+  PMT_DelayedTime_CB->Write();
+  PMT_DelayedTime_Coinc->Write();
+  PMT_DelayedTime_Coinc_NoFMV->Write();
+  PMT_DelayedTime_Coinc_NoFMV_CB->Write();
   PMT_prompt_charge->Write();
   PMT_prompt_charge_zoom->Write();
   PMT_prompt_charge_10hits->Write();
   PMT_prompt_charge_MRDCoinc->Write();
   PMT_prompt_charge_MRDCoinc_NoFMV->Write();
   PMT_prompt_charge_FMV->Write();
+  PMT_prompt_charge_Beam->Write();
+  PMT_prompt_charge_Cosmic->Write();
+  PMT_prompt_charge_LED->Write();
   PMT_prompt_charge_CB->Write();
   PMT_delayed_charge->Write();
   PMT_delayed_charge_zoom->Write();
@@ -599,12 +664,90 @@ bool RunValidation::Finalise(){
   ANNIE_counts->Write();
   ANNIE_rates->Write();
   ANNIE_fractions->Write();
- 
+
+  canvas_beamspill->Divide(2,1);
+  canvas_beamspill->cd(1);
+  PMT_t_clusters_2pe->Rebin(5);
+  PMT_t_clusters_2pe->Draw();
+  canvas_beamspill->cd(2);
+  MRD_t_clusters->Rebin(5);
+  MRD_t_clusters->Draw();
+  canvas_beamspill->Write();
+
+  canvas_mrd_pmt->Divide(2,2);
+  canvas_mrd_pmt->cd(1);
+  MRD_PMT_t_100pe->Draw("colz");
+  canvas_mrd_pmt->cd(2);
+  MRD_PMT_Deltat_100pe->Draw();
+  canvas_mrd_pmt->cd(3);
+  FMV_PMT_Deltat_100pe->Draw();  
+  canvas_mrd_pmt->cd(4);
+  MRD_FMV_Deltat->Draw();
+  canvas_mrd_pmt->Write();
+
+  canvas_triggerwords->Divide(2,1);
+  canvas_triggerwords->cd(1);
+  Triggerwords->Draw();
+  TPad *p = (TPad*) canvas_triggerwords->cd(2);
+  p->SetLogy();
+  ADCWaveform_Samples->Draw();  
+  canvas_triggerwords->Write();
+
+  canvas_prompt_charge->Divide(2,2);
+  TPad *pq1 = (TPad*) canvas_prompt_charge->cd(1);
+  pq1->SetLogy();
+  PMT_prompt_charge->Draw();
+  TPad *pq2 = (TPad*) canvas_prompt_charge->cd(2);
+  pq2->SetLogy();
+  PMT_prompt_charge_MRDCoinc_NoFMV->Draw();
+  TPad *pq3 = (TPad*) canvas_prompt_charge->cd(3);
+  pq3->SetLogy();
+  PMT_delayed_charge_zoom->Draw();
+  canvas_prompt_charge->cd(4);
+  PMT_delayed_charge_CB->Draw("colz");
+  canvas_prompt_charge->Write();
+
+  canvas_neutron_mult->Divide(2,2);
+  TPad *pn1 = (TPad*) canvas_neutron_mult->cd(1);
+  pn1->SetLogy();
+  PMT_DelayedMult->Draw();
+  TPad *pn2 = (TPad*) canvas_neutron_mult->cd(2);
+  pn2->SetLogy();
+  PMT_DelayedMult_Coinc_NoFMV_CB->Draw();
+  TPad *pn3 = (TPad*) canvas_neutron_mult->cd(3);
+  pn3->SetLogy();
+  PMT_DelayedTime->Draw();
+  canvas_neutron_mult->cd(4);
+  PMT_DelayedTime_Coinc_NoFMV_CB->Draw("colz");
+  canvas_neutron_mult->Write();
+
+  canvas_channelkey->Divide(3,1);
+  canvas_channelkey->SetLogy();
+  canvas_channelkey->cd(1);
+  PMT_Channelkeys->Draw();
+  canvas_channelkey->cd(2);
+  MRD_Channelkeys->Draw();
+  canvas_channelkey->cd(3);
+  FMV_Channelkeys->Draw();
+  canvas_channelkey->Write();
+
+  canvas_rates->Divide(2,1);
+  canvas_rates->SetLogy();
+  TPad *pr1 = (TPad*) canvas_rates->cd(1);
+  pr1->SetLogy();
+  pr1->SetGridy();
+  ANNIE_rates->Draw();
+  TPad *pr2 = (TPad*) canvas_rates->cd(2); 
+  pr2->SetLogy();
+  pr2->SetGridy();
+  ANNIE_fractions->Draw();
+  canvas_rates->Write();
+
   if (createImages){
 
     std::stringstream save_mrd_t, save_mrd_t_cosmic, save_pmt_t, save_pmt_t_2pe, save_pmt_t_5pe, save_pmt_t_10pe, save_pmt_t_30pe, save_pmt_tfull, save_pmt_tfull_2pe, save_pmt_tfull_5pe, save_pmt_tfull_10pe, save_pmt_tfull_30pe;
-    std::stringstream save_mrd_pmt_t, save_mrd_pmt_t_100pe, save_mrd_pmt_deltat, save_mrd_pmt_deltat_100pe, save_fmv_pmt_deltat, save_fmv_pmt_deltat_100pe, save_mrd_fmv_deltat;
-    std::stringstream save_pmt_prompt, save_pmt_prompt_zoom, save_pmt_prompt_10, save_pmt_prompt_mrdcoinc, save_pmt_prompt_mrdcoinc_nofmv, save_pmt_prompt_fmv, save_pmt_prompt_cb, save_pmt_del, save_pmt_del_zoom, save_pmt_del_10, save_pmt_del_cb, save_pmt_avgq, save_pmt_avgq_100pe;
+    std::stringstream save_mrd_pmt_t, save_mrd_pmt_t_100pe, save_mrd_pmt_deltat, save_mrd_pmt_deltat_100pe, save_mrd_pmt_t_cosmic, save_mrd_pmt_t_100pe_cosmic, save_mrd_pmt_deltat_cosmic, save_mrd_pmt_deltat_100pe_cosmic, save_fmv_pmt_deltat, save_fmv_pmt_deltat_100pe, save_mrd_fmv_deltat;
+    std::stringstream save_pmt_prompt, save_pmt_prompt_zoom, save_pmt_prompt_10, save_pmt_prompt_mrdcoinc, save_pmt_prompt_mrdcoinc_nofmv, save_pmt_prompt_fmv, save_pmt_prompt_beam, save_pmt_prompt_cosmic, save_pmt_prompt_led, save_pmt_prompt_cb, save_pmt_del, save_pmt_del_zoom, save_pmt_del_10, save_pmt_del_cb, save_pmt_avgq, save_pmt_avgq_100pe;
     std::stringstream save_pmt_chkey, save_mrd_chkey, save_fmv_chkey, save_annie_counts, save_annie_rates, save_annie_fractions;
     std::stringstream save_del_mult, save_del_mult_coinc, save_del_mult_coinc_nofmv, save_del_mult_coinc_nofmv_cb;
     std::stringstream save_adcwaveform, save_triggerwords;
@@ -625,6 +768,10 @@ bool RunValidation::Finalise(){
     save_mrd_pmt_t_100pe << savePath << "R" << GlobalRunNumber << "_MRDPMT_Times_100pe.png";
     save_mrd_pmt_deltat << savePath << "R" << GlobalRunNumber << "_MRDPMT_DeltaTimes.png";
     save_mrd_pmt_deltat_100pe << savePath << "R" << GlobalRunNumber << "_MRDPMT_DeltaTimes_100pe.png";
+    save_mrd_pmt_t_cosmic << savePath << "R" << GlobalRunNumber << "_MRDPMT_Times_Cosmic.png";
+    save_mrd_pmt_t_100pe_cosmic << savePath << "R" << GlobalRunNumber << "_MRDPMT_Times_100pe_Cosmic.png";
+    save_mrd_pmt_deltat_cosmic << savePath << "R" << GlobalRunNumber << "_MRDPMT_DeltaTimes_Cosmic.png";
+    save_mrd_pmt_deltat_100pe_cosmic << savePath << "R" << GlobalRunNumber << "_MRDPMT_DeltaTimes_100pe_Cosmic.png";
     save_fmv_pmt_deltat << savePath << "R" << GlobalRunNumber << "_FMVPMT_DeltaTimes.png";
     save_fmv_pmt_deltat_100pe << savePath << "R" << GlobalRunNumber << "_FMVPMT_DeltaTimes_100pe.png";
     save_mrd_fmv_deltat << savePath << "R" << GlobalRunNumber << "_MRDFMV_DeltaTimes.png";
@@ -634,6 +781,9 @@ bool RunValidation::Finalise(){
     save_pmt_prompt_mrdcoinc << savePath << "R" << GlobalRunNumber << "_PMTCharge_Prompt_MRDCoinc.png";
     save_pmt_prompt_mrdcoinc_nofmv << savePath << "R" << GlobalRunNumber << "_PMTCharge_Prompt_MRDCoinc_NoFMV.png";
     save_pmt_prompt_fmv << savePath << "R" << GlobalRunNumber << "_PMTCharge_Prompt_FMV.png";
+    save_pmt_prompt_beam << savePath << "R" << GlobalRunNumber << "_PMTCharge_Prompt_Beam.png";
+    save_pmt_prompt_cosmic << savePath << "R" << GlobalRunNumber << "_PMTCharge_Prompt_Cosmic.png";
+    save_pmt_prompt_led << savePath << "R" << GlobalRunNumber << "_PMTCharge_Prompt_LED.png";
     save_pmt_prompt_cb << savePath << "R" << GlobalRunNumber << "_PMTCharge_Prompt_CB.png";
     save_pmt_del << savePath << "R" << GlobalRunNumber << "_PMTCharge_Delayed.png";
     save_pmt_del_10 << savePath << "R" << GlobalRunNumber << "_PMTCharge_Delayed_10hits.png";
@@ -704,6 +854,18 @@ bool RunValidation::Finalise(){
     MRD_PMT_Deltat_100pe->Draw();
     canvas->SaveAs(save_mrd_pmt_deltat_100pe.str().c_str());
     canvas->Clear();
+    MRD_PMT_t_Cosmic->Draw();
+    canvas->SaveAs(save_mrd_pmt_t_cosmic.str().c_str());
+    canvas->Clear();
+    MRD_PMT_t_100pe_Cosmic->Draw();
+    canvas->SaveAs(save_mrd_pmt_t_100pe_cosmic.str().c_str());
+    canvas->Clear();
+    MRD_PMT_Deltat_Cosmic->Draw();
+    canvas->SaveAs(save_mrd_pmt_deltat_cosmic.str().c_str());
+    canvas->Clear();
+    MRD_PMT_Deltat_100pe_Cosmic->Draw();
+    canvas->SaveAs(save_mrd_pmt_deltat_100pe_cosmic.str().c_str());
+    canvas->Clear();
     FMV_PMT_Deltat->Draw();
     canvas->SaveAs(save_fmv_pmt_deltat.str().c_str());
     canvas->Clear();
@@ -742,6 +904,15 @@ bool RunValidation::Finalise(){
     canvas->Clear();
     PMT_prompt_charge_FMV->Draw();
     canvas->SaveAs(save_pmt_prompt_fmv.str().c_str());
+    canvas->Clear();
+    PMT_prompt_charge_Beam->Draw();
+    canvas->SaveAs(save_pmt_prompt_beam.str().c_str());
+    canvas->Clear();
+    PMT_prompt_charge_Cosmic->Draw();
+    canvas->SaveAs(save_pmt_prompt_cosmic.str().c_str());
+    canvas->Clear();
+    PMT_prompt_charge_LED->Draw();
+    canvas->SaveAs(save_pmt_prompt_led.str().c_str());
     canvas->Clear();
     PMT_prompt_charge_CB->Draw();
     canvas->SaveAs(save_pmt_prompt_cb.str().c_str());
@@ -807,7 +978,10 @@ void RunValidation::DefineHistograms(){
     outfile = new TFile(file_name.str().c_str(),"RECREATE");
     outfile->cd();
 
-    std::stringstream title_mrd, title_mrd_cosmic, title_pmt, title_pmt_2pe, title_pmt_5pe, title_pmt_10pe, title_pmt_30pe, title_mrd_pmt, title_mrd_pmt_100pe, title_mrd_pmt_delta, title_mrd_pmt_delta_100pe, title_fmv_pmt_delta, title_fmv_pmt_delta_100pe, title_mrd_fmv_delta, title_pmt_prompt, title_pmt_prompt_10, title_pmt_prompt_MRDCoinc, title_pmt_prompt_MRDCoinc_NoFMV, title_pmt_prompt_FMV, title_pmt_prompt_CB, title_chargeperpmt, title_chargeperpmt_100pe, title_pmt_delayed, title_pmt_delayed_10, title_pmt_delayed_CB, title_counts, title_rates, title_fractions, title_delayed_mult, title_delayed_mult_coinc, title_delayed_mult_coinc_nofmv, title_delayed_mult_coinc_nofmv_cb, title_adcwaveform_samples, title_pmt_chankeys, title_mrd_chankeys, title_fmv_chankeys, title_triggerwords;
+    std::stringstream title_mrd, title_mrd_cosmic, title_pmt, title_pmt_2pe, title_pmt_5pe, title_pmt_10pe, title_pmt_30pe, title_mrd_pmt, title_mrd_pmt_100pe, title_mrd_pmt_delta, title_mrd_pmt_delta_100pe, title_mrd_pmt_cosmic, title_mrd_pmt_100pe_cosmic, title_mrd_pmt_delta_cosmic, title_mrd_pmt_delta_100pe_cosmic, title_fmv_pmt_delta, title_fmv_pmt_delta_100pe, title_mrd_fmv_delta, title_pmt_prompt, title_pmt_prompt_10, title_pmt_prompt_MRDCoinc, title_pmt_prompt_MRDCoinc_NoFMV, title_pmt_prompt_FMV, title_pmt_prompt_beam, title_pmt_prompt_cosmic, title_pmt_prompt_led, title_pmt_prompt_CB, title_chargeperpmt, title_chargeperpmt_100pe, title_pmt_delayed, title_pmt_delayed_10, title_pmt_delayed_CB, title_counts, title_rates, title_fractions, title_delayed_mult, title_delayed_mult_coinc, title_delayed_mult_coinc_nofmv, title_delayed_mult_coinc_nofmv_cb, title_delayed_time, title_delayed_time_cb, title_delayed_time_coinc, title_delayed_time_coinc_nofmv, title_delayed_time_coinc_nofmv_cb, title_adcwaveform_samples, title_pmt_chankeys, title_mrd_chankeys, title_fmv_chankeys, title_triggerwords;
+
+    std::stringstream title_pmt_led, title_pmt_2pe_led, title_pmt_5pe_led, title_pmt_10pe_led, title_pmt_30pe_led;
+    std::stringstream title_pmt_cosmics, title_pmt_2pe_cosmics, title_pmt_5pe_cosmics, title_pmt_10pe_cosmics, title_pmt_30pe_cosmics;
 
     title_mrd << "MRD Cluster Times - Run "<<GlobalRunNumber;
     title_mrd_cosmic << "MRD Cluster Times (Cosmic) - Run "<<GlobalRunNumber;
@@ -816,10 +990,24 @@ void RunValidation::DefineHistograms(){
     title_pmt_5pe << "PMT Cluster Times (>5 p.e.) - Run "<<GlobalRunNumber;
     title_pmt_10pe << "PMT Cluster Times (>10 p.e.) - Run "<<GlobalRunNumber;
     title_pmt_30pe << "PMT Cluster Times (>30 p.e.) - Run "<<GlobalRunNumber;
+    title_pmt_led << "PMT Cluster Times - LED triggerword - Run "<<GlobalRunNumber;
+    title_pmt_2pe_led << "PMT Cluster Times - LED triggerword (>2 p.e.) - Run "<<GlobalRunNumber;
+    title_pmt_5pe_led << "PMT Cluster Times - LED triggerword (>5 p.e.) - Run "<<GlobalRunNumber;
+    title_pmt_10pe_led << "PMT Cluster Times - LED triggerword (>10 p.e.) - Run "<<GlobalRunNumber;
+    title_pmt_30pe_led << "PMT Cluster Times - LED triggerword (>30 p.e.) - Run "<<GlobalRunNumber;
+    title_pmt_cosmics << "PMT Cluster Times - Cosmic triggerword - Run "<<GlobalRunNumber;
+    title_pmt_2pe_cosmics << "PMT Cluster Times - Cosmic triggerword (>2 p.e.) - Run "<<GlobalRunNumber;
+    title_pmt_5pe_cosmics << "PMT Cluster Times - Cosmic triggerword (>5 p.e.) - Run "<<GlobalRunNumber;
+    title_pmt_10pe_cosmics << "PMT Cluster Times - Cosmic triggerword (>10 p.e.) - Run "<<GlobalRunNumber;
+    title_pmt_30pe_cosmics << "PMT Cluster Times - Cosmic triggerword (>30 p.e.) - Run "<<GlobalRunNumber;
     title_mrd_pmt << "MRD vs. PMT Cluster Times - Run "<<GlobalRunNumber;
     title_mrd_pmt_100pe << "MRD vs. PMT Cluster Times (>100 p.e.) - Run "<<GlobalRunNumber;
     title_mrd_pmt_delta << "Difference MRD/PMT Cluster Times - Run "<<GlobalRunNumber;
     title_mrd_pmt_delta_100pe << "Difference MRD/PMT Cluster Times (>100 p.e.) - Run "<<GlobalRunNumber;
+    title_mrd_pmt_cosmic << "MRD vs. PMT Cluster Times Cosmics - Run "<<GlobalRunNumber;
+    title_mrd_pmt_100pe_cosmic << "MRD vs. PMT Cluster Times Cosmics (>100 p.e.) - Run "<<GlobalRunNumber;
+    title_mrd_pmt_delta_cosmic << "Difference MRD/PMT Cluster Times Cosmics - Run "<<GlobalRunNumber;
+    title_mrd_pmt_delta_100pe_cosmic << "Difference MRD/PMT Cluster Times Cosmics (>100 p.e.) - Run "<<GlobalRunNumber;
     title_fmv_pmt_delta << "Difference FMV/PMT Cluster Times - Run "<<GlobalRunNumber;
     title_fmv_pmt_delta_100pe << "Difference FMV/PMT Cluster Times (>100 p.e.) - Run "<<GlobalRunNumber;
     title_mrd_fmv_delta << "Difference MRD/FMV Cluster Times - Run "<<GlobalRunNumber;
@@ -828,6 +1016,9 @@ void RunValidation::DefineHistograms(){
     title_pmt_prompt_MRDCoinc << "PMT Prompt Charge (MRD Coinc) - Run "<<GlobalRunNumber;
     title_pmt_prompt_MRDCoinc_NoFMV << "PMT Prompt Charge (MRD Coinc, No FMV) - Run "<<GlobalRunNumber;
     title_pmt_prompt_FMV << "PMT Prompt Charge (FMV hit) - Run "<<GlobalRunNumber;
+    title_pmt_prompt_beam << "PMT Prompt Charge (Beam trigger) - Run "<<GlobalRunNumber;
+    title_pmt_prompt_cosmic << "PMT Prompt Charge (Cosmic trigger) - Run "<<GlobalRunNumber;
+    title_pmt_prompt_led << "PMT Prompt Charge (LED trigger) - Run "<<GlobalRunNumber;
     title_pmt_prompt_CB << "PMT Charge Balance vs prompt Q - Run "<<GlobalRunNumber;
     title_chargeperpmt << "PMT Charge/PMT - Run "<<GlobalRunNumber;
     title_chargeperpmt_100pe << "PMT Charge/PMT (>100 p.e.) - Run "<<GlobalRunNumber;
@@ -844,6 +1035,11 @@ void RunValidation::DefineHistograms(){
     title_delayed_mult_coinc << "Neutron Candidate Multiplicity Distribution (MRD/Tank coincidence) - Run "<<GlobalRunNumber;
     title_delayed_mult_coinc_nofmv << "Neutron Candidate Multiplicity Distribution (MRD/Tank coincidence, No FMV) - Run "<<GlobalRunNumber;
     title_delayed_mult_coinc_nofmv_cb << "Neutron Candidate Multiplicity Distribution (MRD/Tank coincidence, No FMV, CB < 0.4) - Run "<<GlobalRunNumber;
+    title_delayed_time << "Neutron Candidate Time Distribution - Run "<<GlobalRunNumber;
+    title_delayed_time_cb << "Neutron Candidate Time Distribution - Run "<<GlobalRunNumber;
+    title_delayed_time_coinc << "Neutron Candidate Time Distribution (MRD/Tank coincidence) - Run "<<GlobalRunNumber;
+    title_delayed_time_coinc_nofmv << "Neutron Candidate Time Distribution (MRD/Tank coincidence, No FMV) - Run "<<GlobalRunNumber;
+    title_delayed_time_coinc_nofmv_cb << "Neutron Candidate Time Distribution (MRD/Tank coincidence, No FMV, CB < 0.4) - Run "<<GlobalRunNumber;
     title_adcwaveform_samples << "Number of samples in ADC waveforms - Run "<<GlobalRunNumber;
     title_triggerwords << "Triggerwords - Run "<<GlobalRunNumber;   
 
@@ -854,6 +1050,16 @@ void RunValidation::DefineHistograms(){
     PMT_t_clusters_5pe = new TH1D("PMT_t_clusters_5pe",title_pmt_5pe.str().c_str(),250,0,2000);
     PMT_t_clusters_10pe = new TH1D("PMT_t_clusters_10pe",title_pmt_10pe.str().c_str(),250,0,2000);
     PMT_t_clusters_30pe = new TH1D("PMT_t_clusters_30pe",title_pmt_30pe.str().c_str(),250,0,2000);
+    PMT_t_clusters_cosmics = new TH1D("PMT_t_clusters_cosmics",title_pmt.str().c_str(),250,0,2000);
+    PMT_t_clusters_2pe_cosmics = new TH1D("PMT_t_clusters_2pe_cosmics",title_pmt_2pe.str().c_str(),250,0,2000);
+    PMT_t_clusters_5pe_cosmics = new TH1D("PMT_t_clusters_5pe_cosmics",title_pmt_5pe.str().c_str(),250,0,2000);
+    PMT_t_clusters_10pe_cosmics = new TH1D("PMT_t_clusters_10pe_cosmics",title_pmt_10pe.str().c_str(),250,0,2000);
+    PMT_t_clusters_30pe_cosmics = new TH1D("PMT_t_clusters_30pe_cosmics",title_pmt_30pe.str().c_str(),250,0,2000);
+    PMT_t_clusters_led = new TH1D("PMT_t_clusters_led",title_pmt_led.str().c_str(),250,0,2000);
+    PMT_t_clusters_2pe_led = new TH1D("PMT_t_clusters_2pe_led",title_pmt_2pe_led.str().c_str(),250,0,2000);
+    PMT_t_clusters_5pe_led = new TH1D("PMT_t_clusters_5pe_led",title_pmt_5pe_led.str().c_str(),250,0,2000);
+    PMT_t_clusters_10pe_led = new TH1D("PMT_t_clusters_10pe_led",title_pmt_10pe_led.str().c_str(),250,0,2000);
+    PMT_t_clusters_30pe_led = new TH1D("PMT_t_clusters_30pe_led",title_pmt_30pe_led.str().c_str(),250,0,2000);
     PMT_t_clusters_full = new TH1D("PMT_t_clusters_full",title_pmt.str().c_str(),500,0,75000);
     PMT_t_clusters_2pe_full = new TH1D("PMT_t_clusters_2pe_full",title_pmt_2pe.str().c_str(),500,0,75000);
     PMT_t_clusters_5pe_full = new TH1D("PMT_t_clusters_5pe_full",title_pmt_5pe.str().c_str(),500,0,75000);
@@ -863,6 +1069,10 @@ void RunValidation::DefineHistograms(){
     MRD_PMT_t_100pe = new TH2D("MRD_PMT_t_100pe",title_mrd_pmt_100pe.str().c_str(),50,0,4000,50,0,2000);
     MRD_PMT_Deltat = new TH1D("MRD_PMT_Deltat",title_mrd_pmt_delta.str().c_str(),500,-2000,4000);
     MRD_PMT_Deltat_100pe = new TH1D("MRD_PMT_Deltat_100pe",title_mrd_pmt_delta_100pe.str().c_str(),500,-2000,4000);
+    MRD_PMT_t_Cosmic = new TH2D("MRD_PMT_t_Cosmic",title_mrd_pmt_cosmic.str().c_str(),50,0,4000,50,0,2000);
+    MRD_PMT_t_100pe_Cosmic = new TH2D("MRD_PMT_t_100pe_Cosmic",title_mrd_pmt_100pe_cosmic.str().c_str(),50,0,4000,50,0,2000);
+    MRD_PMT_Deltat_Cosmic = new TH1D("MRD_PMT_Deltat_Cosmic",title_mrd_pmt_delta_cosmic.str().c_str(),500,-2000,4000);
+    MRD_PMT_Deltat_100pe_Cosmic = new TH1D("MRD_PMT_Deltat_100pe_Cosmic",title_mrd_pmt_delta_100pe_cosmic.str().c_str(),500,-2000,4000);
     FMV_PMT_Deltat = new TH1D("FMV_PMT_Deltat",title_fmv_pmt_delta.str().c_str(),500,-2000,4000);
     FMV_PMT_Deltat_100pe = new TH1D("FMV_PMT_Deltat_100pe",title_fmv_pmt_delta_100pe.str().c_str(),500,-2000,4000);
     MRD_FMV_Deltat = new TH1D("MRD_FMV_Deltat",title_mrd_fmv_delta.str().c_str(),500,-2000,4000);
@@ -877,6 +1087,9 @@ void RunValidation::DefineHistograms(){
     PMT_prompt_charge_MRDCoinc = new TH1D("PMT_prompt_charge_MRDCoinc",title_pmt_prompt_MRDCoinc.str().c_str(),200,0,5000);
     PMT_prompt_charge_MRDCoinc_NoFMV = new TH1D("PMT_prompt_charge_MRDCoinc_NoFMV",title_pmt_prompt_MRDCoinc_NoFMV.str().c_str(),200,0,5000);
     PMT_prompt_charge_FMV = new TH1D("PMT_prompt_charge_FMV",title_pmt_prompt_FMV.str().c_str(),200,0,5000);
+    PMT_prompt_charge_Beam = new TH1D("PMT_prompt_charge_Beam",title_pmt_prompt_beam.str().c_str(),200,0,5000);
+    PMT_prompt_charge_Cosmic = new TH1D("PMT_prompt_charge_Cosmic",title_pmt_prompt_cosmic.str().c_str(),200,0,5000);
+    PMT_prompt_charge_LED = new TH1D("PMT_prompt_charge_LED",title_pmt_prompt_led.str().c_str(),200,0,5000);
     PMT_prompt_charge_CB = new TH2D("PMT_prompt_charge_CB",title_pmt_prompt_CB.str().c_str(),200,0,200,200,0,1);
     PMT_delayed_charge_CB = new TH2D("PMT_delayed_charge_CB",title_pmt_delayed_CB.str().c_str(),200,0,200,200,0,1);
     PMT_Channelkeys = new TH1D("PMT_Channelkeys",title_pmt_chankeys.str().c_str(),132,332,446);
@@ -889,6 +1102,11 @@ void RunValidation::DefineHistograms(){
     PMT_DelayedMult_Coinc = new TH1D("PMT_DelayedMult_Coinc",title_delayed_mult_coinc.str().c_str(),20,0,20);
     PMT_DelayedMult_Coinc_NoFMV = new TH1D("PMT_DelayedMult_Coinc_NoFMV",title_delayed_mult_coinc_nofmv.str().c_str(),20,0,20);
     PMT_DelayedMult_Coinc_NoFMV_CB = new TH1D("PMT_DelayedMult_Coinc_NoFMV_CB",title_delayed_mult_coinc_nofmv_cb.str().c_str(),20,0,20);
+    PMT_DelayedTime = new TH1D("PMT_DelayedTime",title_delayed_time.str().c_str(),100,12000,67000);
+    PMT_DelayedTime_CB = new TH1D("PMT_DelayedTime_CB",title_delayed_time_cb.str().c_str(),100,12000,67000);
+    PMT_DelayedTime_Coinc = new TH1D("PMT_DelayedTime_Coinc",title_delayed_time_coinc.str().c_str(),100,12000,67000);
+    PMT_DelayedTime_Coinc_NoFMV = new TH1D("PMT_DelayedTime_Coinc_NoFMV",title_delayed_time_coinc_nofmv.str().c_str(),100,12000,67000);
+    PMT_DelayedTime_Coinc_NoFMV_CB = new TH1D("PMT_DelayedTime_Coinc_NoFMV_CB",title_delayed_time_coinc_nofmv_cb.str().c_str(),100,12000,67000);
     ADCWaveform_Samples = new TH1D("ADCWaveform_Samples",title_adcwaveform_samples.str().c_str(),5000,0,50000);  
     Triggerwords = new TH1D("Triggerwords",title_triggerwords.str().c_str(),60,0,60);
 
@@ -899,6 +1117,16 @@ void RunValidation::DefineHistograms(){
     PMT_t_clusters_5pe->GetXaxis()->SetTitle("t_{PMT} [ns]");
     PMT_t_clusters_10pe->GetXaxis()->SetTitle("t_{PMT} [ns]");
     PMT_t_clusters_30pe->GetXaxis()->SetTitle("t_{PMT} [ns]");
+    PMT_t_clusters_cosmics->GetXaxis()->SetTitle("t_{PMT} [ns]");
+    PMT_t_clusters_2pe_cosmics->GetXaxis()->SetTitle("t_{PMT} [ns]");
+    PMT_t_clusters_5pe_cosmics->GetXaxis()->SetTitle("t_{PMT} [ns]");
+    PMT_t_clusters_10pe_cosmics->GetXaxis()->SetTitle("t_{PMT} [ns]");
+    PMT_t_clusters_30pe_cosmics->GetXaxis()->SetTitle("t_{PMT} [ns]");
+    PMT_t_clusters_led->GetXaxis()->SetTitle("t_{PMT} [ns]");
+    PMT_t_clusters_2pe_led->GetXaxis()->SetTitle("t_{PMT} [ns]");
+    PMT_t_clusters_5pe_led->GetXaxis()->SetTitle("t_{PMT} [ns]");
+    PMT_t_clusters_10pe_led->GetXaxis()->SetTitle("t_{PMT} [ns]");
+    PMT_t_clusters_30pe_led->GetXaxis()->SetTitle("t_{PMT} [ns]");
     PMT_t_clusters_full->GetXaxis()->SetTitle("t_{PMT} [ns]");
     PMT_t_clusters_2pe_full->GetXaxis()->SetTitle("t_{PMT} [ns]");
     PMT_t_clusters_5pe_full->GetXaxis()->SetTitle("t_{PMT} [ns]");
@@ -910,6 +1138,12 @@ void RunValidation::DefineHistograms(){
     MRD_PMT_t_100pe->GetYaxis()->SetTitle("t_{PMT} [ns]");
     MRD_PMT_Deltat->GetXaxis()->SetTitle("t_{MRD}-t_{PMT} [ns]");
     MRD_PMT_Deltat_100pe->GetXaxis()->SetTitle("t_{MRD}-t_{PMT} [ns]");
+    MRD_PMT_t_Cosmic->GetXaxis()->SetTitle("t_{MRD} [ns]");
+    MRD_PMT_t_Cosmic->GetYaxis()->SetTitle("t_{PMT} [ns]");
+    MRD_PMT_t_100pe_Cosmic->GetXaxis()->SetTitle("t_{MRD} [ns]");
+    MRD_PMT_t_100pe_Cosmic->GetYaxis()->SetTitle("t_{PMT} [ns]");
+    MRD_PMT_Deltat_Cosmic->GetXaxis()->SetTitle("t_{MRD}-t_{PMT} [ns]");
+    MRD_PMT_Deltat_100pe_Cosmic->GetXaxis()->SetTitle("t_{MRD}-t_{PMT} [ns]");
     FMV_PMT_Deltat->GetXaxis()->SetTitle("t_{FMV}-t_{PMT} [ns]");
     FMV_PMT_Deltat_100pe->GetXaxis()->SetTitle("t_{FMV}-t_{PMT} [ns]");
     MRD_FMV_Deltat->GetXaxis()->SetTitle("t_{MRD}-t_{FMV} [ns]");
@@ -919,6 +1153,9 @@ void RunValidation::DefineHistograms(){
     PMT_prompt_charge_MRDCoinc->GetXaxis()->SetTitle("q_{prompt} [p.e.]");
     PMT_prompt_charge_MRDCoinc_NoFMV->GetXaxis()->SetTitle("q_{prompt} [p.e.]");
     PMT_prompt_charge_FMV->GetXaxis()->SetTitle("q_{prompt} [p.e.]");
+    PMT_prompt_charge_Beam->GetXaxis()->SetTitle("q_{prompt} [p.e.]");
+    PMT_prompt_charge_Cosmic->GetXaxis()->SetTitle("q_{prompt} [p.e.]");
+    PMT_prompt_charge_LED->GetXaxis()->SetTitle("q_{prompt} [p.e.]");
     PMT_delayed_charge->GetXaxis()->SetTitle("q_{delayed} [p.e.]");
     PMT_delayed_charge_10hits->GetXaxis()->SetTitle("q_{delayed} [p.e.]");
     PMT_delayed_charge_zoom->GetXaxis()->SetTitle("q_{delayed} [p.e.]");
@@ -947,11 +1184,28 @@ void RunValidation::DefineHistograms(){
     PMT_DelayedMult_Coinc->GetYaxis()->SetTitle("#");
     PMT_DelayedMult_Coinc_NoFMV->GetYaxis()->SetTitle("#");
     PMT_DelayedMult_Coinc_NoFMV_CB->GetYaxis()->SetTitle("#");
+    PMT_DelayedTime->GetXaxis()->SetTitle("Cluster time [ns]");
+    PMT_DelayedTime_CB->GetXaxis()->SetTitle("Cluster time [ns]");
+    PMT_DelayedTime_Coinc->GetXaxis()->SetTitle("Cluster time [ns]");
+    PMT_DelayedTime_Coinc_NoFMV->GetXaxis()->SetTitle("Cluster time [ns]");
+    PMT_DelayedTime_Coinc_NoFMV_CB->GetXaxis()->SetTitle("Cluster time [ns]");
+    PMT_DelayedTime->GetYaxis()->SetTitle("#");
+    PMT_DelayedTime_Coinc->GetYaxis()->SetTitle("#");
+    PMT_DelayedTime_Coinc_NoFMV->GetYaxis()->SetTitle("#");
+    PMT_DelayedTime_Coinc_NoFMV_CB->GetYaxis()->SetTitle("#");
     ADCWaveform_Samples->GetXaxis()->SetTitle("Number of samples in waveform (ADC)");
     ADCWaveform_Samples->GetYaxis()->SetTitle("#");
     Triggerwords->SetStats(0);
     Triggerwords->GetXaxis()->SetTitle("Triggerword");
     Triggerwords->GetYaxis()->SetTitle("#");
+
+    canvas_beamspill = new TCanvas("canvas_beamspill","Beamspill",900,600);
+    canvas_mrd_pmt = new TCanvas("canvas_mrd_pmt","MRD-PMT alignment",900,600);
+    canvas_triggerwords = new TCanvas("canvas_triggerwords","Triggerwords",900,600);
+    canvas_prompt_charge = new TCanvas("canvas_prompt_charge","Prompt charge",900,600);
+    canvas_neutron_mult = new TCanvas("canvas_neutron_mult","Neutron multiplicity",900,600);
+    canvas_channelkey = new TCanvas("canvas_channelkey","Channelkeys",900,600);
+    canvas_rates = new TCanvas("canvas_rates","Rates",900,600);
 
     gROOT->cd();
 
