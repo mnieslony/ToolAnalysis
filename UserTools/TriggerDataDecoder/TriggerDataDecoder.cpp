@@ -53,6 +53,7 @@ bool TriggerDataDecoder::Initialise(std::string configfile, DataModel &data){
   loop_nr = 0;
 
 
+  m_data->CStore.Set("NewCTCDataAvailable",false);
   return true;
 }
 
@@ -60,7 +61,6 @@ bool TriggerDataDecoder::Initialise(std::string configfile, DataModel &data){
 bool TriggerDataDecoder::Execute(){
 
   if (mode == "EventBuilding"){
-    m_data->CStore.Set("NewCTCDataAvailable",false);
     bool PauseCTCDecoding = false;
     m_data->CStore.Get("PauseCTCDecoding",PauseCTCDecoding);
     if (PauseCTCDecoding){

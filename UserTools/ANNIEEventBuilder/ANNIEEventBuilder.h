@@ -51,6 +51,9 @@ struct TimeStream{
   std::vector<uint64_t> CTCTimestamps;  //Contains CTC timestamps encountered so far (keys in TimeToTriggerWordMap)
   std::vector<uint64_t> CTCTimestampsExtendedCC; 	//Contains CTC timestamps of triggerword 41 (CC extended readouts), used to further characterize main CTC timestamps
   std::vector<uint64_t> CTCTimestampsExtendedNC; 	//Contains CTC timestamps of triggerword 40 (NC extended readouts), used to further characterize main CTC timestamps
+  std::map<uint64_t,bool> VMETimestampDisk;	//Information whether the tank data is in memory (true) or saved to a temporary file (false)
+  std::map<uint64_t,bool> MRDTimestampDisk; //Information whether the MRD data is in memory (true) or saved to a temporary file (false)
+  std::map<uint64_t,bool> TriggerTimestampDisk; //Information whether the trigger data is in memory (true) or saved to a temporary file (false)
   ~TimeStream(){}
 };
 
@@ -65,9 +68,11 @@ class ANNIEEventBuilder: public Tool {
   bool Finalise(); ///< Finalise function used to clean up resources.
  
   void CardIDToElectronicsSpace(int CardID, int &CrateNum, int &SlotNum);
+  void ElectronicsSpacetoCardID(int CrateNum, int SlotNum, int &CardID);
   void RemoveCosmics();             // Removes events from MRD stream labeled as a cosmic trigger only (TankAndMRD only)
   std::vector<std::vector<int>> GetChannelsFromWaveMapSampleSize(std::map<std::vector<int>,int> WaveMap);  //Returns the channels for WaveMap entries (used for orphaned events)
   std::vector<std::vector<int>> GetChannelsFromWaveMap(std::map<std::vector<int>,std::vector<uint16_t>> WaveMap);
+  std::vector<std::vector<int>> GetChannelsFromHitMap(std::vector<unsigned long> HitMap);
 
   //Methods to add info from different data streams to ANNIEEvent booststore
   void BuildANNIEEventRunInfo(int RunNum, int SubRunNum, int PartNum, int RunType, uint64_t RunStartTime);  //Loads run level information, as well as the entry number
@@ -106,6 +111,16 @@ class ANNIEEventBuilder: public Tool {
   BoostStore *OrphanStore = nullptr;
   std::string OrphanFileBase="";
   
+  // store temporary information in Temp BoostStore
+  BoostStore *TempStore = nullptr;
+  std::string TempFileBase = "";
+
+  //Method to (potentially) store currently unused data in the TempStore
+  void ManageTempData();
+
+  //Get back data that was (temporarily) off-loaded to disk
+  void GetTempData();
+
   template<typename T> void RemoveDuplicates(std::vector<T> &v){
     typename std::vector<T>::iterator itr = v.begin();
     typename std::unordered_set<T> s;
@@ -122,6 +137,8 @@ class ANNIEEventBuilder: public Tool {
   std::map<std::vector<int>,int> TankPMTCrateSpaceToChannelNumMap;
   std::map<std::vector<int>,int> AuxCrateSpaceToChannelNumMap;
   std::map<std::vector<int>,int> MRDCrateSpaceToChannelNumMap;
+  std::map<int,std::vector<int>> ChannelNumToTankPMTCrateSpaceMap;
+  std::map<int,std::vector<int>> AuxChannelNumToCrateSpaceMap;
 
 
   //####### MAPS THAT ARE LOADED FROM OR CONTAIN INFO FROM THE CSTORE (FROM MRD/PMT DECODING) #########
@@ -151,6 +168,11 @@ class ANNIEEventBuilder: public Tool {
   std::map<uint64_t, std::map<unsigned long,std::vector<Waveform<unsigned short>>>> *FinishedRawWaveformsAux;  //Key: {MTCTime}, value: map of raw waveforms (aux channels)
   std::map<uint64_t, std::map<unsigned long,std::vector<CalibratedADCWaveform<double>>>> *FinishedCalibratedWaveforms;  //Key: {MTCTime}, value: map of calibrated waveforms
   std::map<uint64_t, std::map<unsigned long,std::vector<CalibratedADCWaveform<double>>>> *FinishedCalibratedWaveformsAux;  //Key: {MTCTime}, value: map of calibrated waveforms (aux channels)
+  std::map<uint64_t, std::map<unsigned long,std::vector<Hit>>*> *InProgressHits;        //Key: {MTCTime}, value: map of  Hit distributions
+  std::map<uint64_t, std::map<unsigned long,std::vector<Hit>>*> *InProgressHitsAux;        //Key: {MTCTime}, value: map of  Hit distributions
+  std::map<uint64_t, std::map<unsigned long,std::vector<std::vector<ADCPulse>>>> *InProgressRecoADCHits; //Key: {MTCTime}, value: map of found pulses
+  std::map<uint64_t, std::map<unsigned long,std::vector<std::vector<ADCPulse>>>> *InProgressRecoADCHitsAux; //Key: {MTCTime}, value: map of found pulses
+  std::map<uint64_t, std::vector<unsigned long>> *InProgressChkey; //Key: {MTCTime}, value: map of in progress chankeys
   std::map<uint64_t, std::map<unsigned long,std::vector<Hit>>*> *FinishedHits;        //Key: {MTCTime}, value: map of  Hit distributions
   std::map<uint64_t, std::map<unsigned long,std::vector<Hit>>*> *FinishedHitsAux;        //Key: {MTCTime}, value: map of  Hit distributions
   std::map<uint64_t, std::map<unsigned long,std::vector<std::vector<ADCPulse>>>> *FinishedRecoADCHits; //Key: {MTCTime}, value: map of found pulses
@@ -198,6 +220,11 @@ class ANNIEEventBuilder: public Tool {
   bool IsNewMRDData;
   bool IsNewTankData;
   bool IsNewCTCData;
+
+  int MaxVME;
+  int MaxMRD;
+  int MaxTrigger;
+  bool OffloadToDisk;
 
   //Run Number defined in config, others iterated over as ANNIEEvent filled
   Store RunInfoPostgress;   //Has Run number, subrun number, etc...

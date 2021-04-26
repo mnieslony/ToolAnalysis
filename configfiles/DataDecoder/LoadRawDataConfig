@@ -5,4 +5,5 @@ Mode FileList
 InputFile ./configfiles/DataDecoder/my_files.txt
 DummyRunInfo 1
 StoreTrigOverlap 0
-ReadTrigOverlap 1
+ReadTrigOverlap 0
+StoreRawData 0

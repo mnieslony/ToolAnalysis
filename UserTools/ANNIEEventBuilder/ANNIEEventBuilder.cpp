@@ -27,6 +27,11 @@ bool ANNIEEventBuilder::Initialise(std::string configfile, DataModel &data){
   pause_threshold = 5*60;        //s
   save_raw_data = false;	//Default option: Do not save the raw data (processed files get very large)
   store_beam_status = false;	//Should the beam status be stored? If yes, need the BeamDecoder tool in the ToolChain
+  MaxVME = 200;			//Max unfinished VME objects in memory
+  MaxMRD = 200;			//Max unfinished MRD timestamps in memory
+  MaxTrigger = 2000;		//Max unfinished trigger timestamps in memory
+  OffloadToDisk = false;	//Should data be offloaded to disk? (use in case of large file sizes)
+
 
   /////////////////////////////////////////////////////////////////
   m_variables.Get("verbosity",verbosity);
@@ -45,6 +50,10 @@ bool ANNIEEventBuilder::Initialise(std::string configfile, DataModel &data){
   m_variables.Get("MaxStreamMatchingTimeSeparation",pause_threshold);
   m_variables.Get("SaveRawData",save_raw_data);
   m_variables.Get("StoreBeamStatus",store_beam_status);
+  m_variables.Get("MaxVME",MaxVME);
+  m_variables.Get("MaxMRD",MaxMRD);
+  m_variables.Get("MaxTrigger",MaxTrigger);
+  m_variables.Get("OffloadToDisk",OffloadToDisk);
   pause_threshold*=1E9;
 
   if(BuildType == "TankAndMRD" || BuildType == "TankAndMRDAndCTC"){
@@ -64,6 +73,8 @@ bool ANNIEEventBuilder::Initialise(std::string configfile, DataModel &data){
   m_data->CStore.Get("TankPMTCrateSpaceToChannelNumMap",TankPMTCrateSpaceToChannelNumMap);
   m_data->CStore.Get("AuxCrateSpaceToChannelNumMap",AuxCrateSpaceToChannelNumMap);
   m_data->CStore.Get("MRDCrateSpaceToChannelNumMap",MRDCrateSpaceToChannelNumMap);
+  m_data->CStore.Get("ChannelNumToTankPMTCrateSpaceMap",ChannelNumToTankPMTCrateSpaceMap);
+  m_data->CStore.Get("AuxChannelNumToCrateSpaceMap",AuxChannelNumToCrateSpaceMap);
 
   if(BuildType == "Tank" || BuildType == "TankAndMRD" || BuildType == "TankAndMRDAndCTC" || BuildType == "TankAndCTC"){
     int NumTankPMTChannels = TankPMTCrateSpaceToChannelNumMap.size();
@@ -90,6 +101,18 @@ bool ANNIEEventBuilder::Initialise(std::string configfile, DataModel &data){
   
   OrphanStore = new BoostStore(false,2);
 
+  FinishedHits = new std::map<uint64_t, std::map<unsigned long,std::vector<Hit>>*>;
+  FinishedHitsAux = new std::map<uint64_t, std::map<unsigned long,std::vector<Hit>>*>;
+  FinishedRecoADCHits = new std::map<uint64_t, std::map<unsigned long,std::vector<std::vector<ADCPulse>>>>;
+  FinishedRecoADCHitsAux = new std::map<uint64_t, std::map<unsigned long,std::vector<std::vector<ADCPulse>>>>;
+
+  //Initialise TempData BoostStore
+  if (OffloadToDisk){
+    BoostStore TempStore;
+    TempStore.Save("TempStore");
+    TempStore.Close();
+  }
+
   return true;
 }
 
@@ -110,6 +133,7 @@ bool ANNIEEventBuilder::Execute(){
   // likewise ensure we try to do all possible matching if we've hit the end of the file
   bool file_completed=false;
   m_data->CStore.Get("FileCompleted",file_completed);
+  file_completed = false;
   toolchain_stopping |= file_completed;
   if(toolchain_stopping){
     Log("ANNIEEventBuilder: StopLoop or FileCompleted detected, forcing building of any remaining events in the timestream",v_warning,verbosity);
@@ -159,6 +183,7 @@ bool ANNIEEventBuilder::Execute(){
     else if(IsNewTankData) this->ProcessNewTankPMTData();
     this->ManageOrphanage();
   
+    if (OffloadToDisk) this->GetTempData();
     bool got_hits = false;
     got_hits = this->FetchWaveformsHits();
 
@@ -211,7 +236,11 @@ bool ANNIEEventBuilder::Execute(){
         FinishedRawWaveformsAux->erase(PMTEventsToDelete.at(i));
         FinishedCalibratedWaveforms->erase(PMTEventsToDelete.at(i));
         FinishedCalibratedWaveformsAux->erase(PMTEventsToDelete.at(i));*/
-        FinishedHits->erase(PMTEventsToDelete.at(i));
+	//std::map<unsigned long,std::vector<Hit>>* ahit = FinishedHits->at(PMTEventsToDelete.at(i));
+        //delete ahit;
+	//std::map<unsigned long,std::vector<Hit>>* ahitaux = FinishedHitsAux->at(PMTEventsToDelete.at(i));
+        //delete ahitaux;
+	FinishedHits->erase(PMTEventsToDelete.at(i));
         FinishedHitsAux->erase(PMTEventsToDelete.at(i));
         FinishedRecoADCHits->erase(PMTEventsToDelete.at(i));
         FinishedRecoADCHitsAux->erase(PMTEventsToDelete.at(i));
@@ -305,7 +334,6 @@ bool ANNIEEventBuilder::Execute(){
     m_data->CStore.Get("NewTankPMTDataAvailable",IsNewTankData);
     if(IsNewTankData) this->ProcessNewTankPMTData();
     this->ManageOrphanage();
-    this->FetchWaveformsHits();
 
     //Look through our MRD data for any new timestamps
     m_data->CStore.Get("MRDEventTriggerTypes",myMRDMaps.MRDTriggerTypeMap);
@@ -380,6 +408,8 @@ bool ANNIEEventBuilder::Execute(){
     //*10 provides a buffer between paired events and events at the tail of the timestamp streams
     //Without it, events get moved to the orphanage that probably shouldn't
     if((MinStamps > (EventsPerPairing*10))||toolchain_stopping){
+      if (OffloadToDisk) this->GetTempData();
+      this->FetchWaveformsHits();
       this->RemoveCosmics();
       BeamTankMRDPairs = this->PairTankPMTAndMRDTriggers();
       this->ManageOrphanage();
@@ -426,6 +456,8 @@ bool ANNIEEventBuilder::Execute(){
           FinishedRawWaveformsAux->erase(TankCounterTime);
           FinishedCalibratedWaveforms->erase(TankCounterTime);
           FinishedCalibratedWaveformsAux->erase(TankCounterTime);*/
+	  //delete FinishedHits->at(TankCounterTime);
+	  //delete FinishedHitsAux->at(TankCounterTime);
           FinishedHits->erase(TankCounterTime);
           FinishedHitsAux->erase(TankCounterTime);
           FinishedRecoADCHits->erase(TankCounterTime);
@@ -448,7 +480,6 @@ bool ANNIEEventBuilder::Execute(){
     m_data->CStore.Get("NewTankPMTDataAvailable",IsNewTankData);
     if(IsNewTankData) this->ProcessNewTankPMTData();
     this->ManageOrphanage();
-    this->FetchWaveformsHits();
     
     //Look through our MRD data for any new timestamps
     m_data->CStore.Get("MRDEventTriggerTypes",myMRDMaps.MRDTriggerTypeMap);
@@ -459,11 +490,16 @@ bool ANNIEEventBuilder::Execute(){
     if(IsNewMRDData) this->ProcessNewMRDData();
 
     //Look through CTC data for any new timestamps
+    //std::cout <<"Get TimeToTriggerWordMap + BeamStatusMap"<<std::endl;
     m_data->CStore.Get("TimeToTriggerWordMap",TimeToTriggerWordMap);
     m_data->CStore.Get("TimeToTriggerWordMapComplete",TimeToTriggerWordMapComplete);
     if (store_beam_status) m_data->CStore.Get("BeamStatusMap",BeamStatusMap);
     m_data->CStore.Get("NewCTCDataAvailable",IsNewCTCData);
     if(IsNewCTCData) this->ProcessNewCTCData();
+    //std::cout <<" Done "<<std::endl;
+
+    //Check if maps are already too full
+    if (OffloadToDisk) this->ManageTempData();
 
     //Now, pair up PMT/MRD/Triggers...
     int NumTankTimestamps = myTimeStream.BeamTankTimestamps.size();
@@ -552,6 +588,9 @@ bool ANNIEEventBuilder::Execute(){
       this->ManageOrphanage();*/
 
       if(verbosity>4) std::cout << "BEGINNING STREAM MERGING " << std::endl;
+      if (OffloadToDisk) this->GetTempData();
+      this->FetchWaveformsHits();
+
       //Prioritize tank matching vs. MRD matching -> check slowest in progress timestamp
       uint64_t max_matching_time = (slowest_stream_timestamp < slowest_in_progress_tank)? slowest_stream_timestamp : slowest_in_progress_tank;
       if (verbosity > 3) std::cout <<"ANNIEEventBuilder Tool: slowest_stream_timestamp: "<<slowest_stream_timestamp<<", slowest_in_progress_tank: "<<slowest_in_progress_tank<<", max_matching_time: "<<max_matching_time<<std::endl;
@@ -581,6 +620,7 @@ bool ANNIEEventBuilder::Execute(){
             int CTCWordExtended = CTCExtended[CTCtimestamp];
             this->BuildANNIEEventCTC(CTCtimestamp,CTCWord,CTCWordExtended);
             TimeToTriggerWordMap->erase(CTCtimestamp);
+            CTCExtended.erase(CTCtimestamp);
             DataStreams["CTC"]=1;
             if (store_beam_status){
               if (BeamStatusMap->count(CTCtimestamp) == 0){
@@ -661,6 +701,8 @@ bool ANNIEEventBuilder::Execute(){
         FinishedRawWaveformsAux->erase(TimesToDelete.at(i_delete));
         FinishedCalibratedWaveforms->erase(TimesToDelete.at(i_delete));
         FinishedCalibratedWaveformsAux->erase(TimesToDelete.at(i_delete));*/
+	//delete FinishedHits->at(TimesToDelete.at(i_delete));
+	//delete FinishedHitsAux->at(TimesToDelete.at(i_delete));
         FinishedHits->erase(TimesToDelete.at(i_delete));
         FinishedHitsAux->erase(TimesToDelete.at(i_delete));
         FinishedRecoADCHits->erase(TimesToDelete.at(i_delete));
@@ -678,7 +720,6 @@ bool ANNIEEventBuilder::Execute(){
     m_data->CStore.Get("NewTankPMTDataAvailable",IsNewTankData);
     if(IsNewTankData) this->ProcessNewTankPMTData();
     this->ManageOrphanage();
-    this->FetchWaveformsHits();
 
     //Look through CTC data for any new timestamps
     m_data->CStore.Get("TimeToTriggerWordMap",TimeToTriggerWordMap);
@@ -756,6 +797,8 @@ bool ANNIEEventBuilder::Execute(){
 
       uint64_t max_matching_time = (slowest_stream_timestamp < slowest_in_progress_tank)? slowest_stream_timestamp : slowest_in_progress_tank;
       if(verbosity>4) std::cout << "BEGINNING STREAM MERGING " << std::endl;
+      if (OffloadToDisk) this->GetTempData();
+      this->FetchWaveformsHits();
       ThisBuildMap = this->MergeStreams(ThisBuildMap,max_matching_time,toolchain_stopping);
       //ThisBuildMap = this->MergeStreams(ThisBuildMap,slowest_stream_timestamp,toolchain_stopping);
       Log("ANNIEEventBuilder: Calling ManageOrphanage post MergeStreams",v_debug,verbosity);
@@ -780,6 +823,7 @@ bool ANNIEEventBuilder::Execute(){
             int CTCWordExtended = CTCExtended[CTCtimestamp];
             this->BuildANNIEEventCTC(CTCtimestamp,CTCWord,CTCWordExtended);
             TimeToTriggerWordMap->erase(CTCtimestamp);
+            CTCExtended.erase(CTCtimestamp);
             DataStreams["CTC"]=1;
             if (store_beam_status){
               if (BeamStatusMap->count(CTCtimestamp) == 0){
@@ -822,6 +866,8 @@ bool ANNIEEventBuilder::Execute(){
         FinishedRawWaveformsAux->erase(TimesToDelete.at(i_delete));
         FinishedCalibratedWaveforms->erase(TimesToDelete.at(i_delete));
         FinishedCalibratedWaveformsAux->erase(TimesToDelete.at(i_delete));*/
+	//delete FinishedHits->at(TimesToDelete.at(i_delete));
+	//delete FinishedHitsAux->at(TimesToDelete.at(i_delete));
         FinishedHits->erase(TimesToDelete.at(i_delete));
         FinishedHitsAux->erase(TimesToDelete.at(i_delete));
         FinishedRecoADCHits->erase(TimesToDelete.at(i_delete));
@@ -939,6 +985,7 @@ bool ANNIEEventBuilder::Execute(){
             int CTCWordExtended = CTCExtended[CTCtimestamp];
             this->BuildANNIEEventCTC(CTCtimestamp,CTCWord,CTCWordExtended);
             TimeToTriggerWordMap->erase(CTCtimestamp);
+            CTCExtended.erase(CTCtimestamp);
             DataStreams["CTC"]=1;
             if (store_beam_status){
               if (BeamStatusMap->count(CTCtimestamp) == 0){
@@ -991,7 +1038,6 @@ bool ANNIEEventBuilder::Finalise(){
 
   //Deal with any remaining orphans
   if(OrphanOldTankTimestamps && (BuildType == "Tank" || BuildType == "TankAndMRD" || BuildType == "TankAndCTC" || BuildType == "TankAndMRDAndCTC")){
-    if (verbosity > 4) std::cout <<"ANNIEEventBuilder: Remaining in progress events in Finalise step: "<<InProgressTankEvents->size()<<std::endl;
     std::map<uint64_t,std::string> MRDOrphans;
     std::map<uint64_t,double> MRDOrphansTDiff;
     std::map<uint64_t,std::string> CTCOrphans;
@@ -999,6 +1045,8 @@ bool ANNIEEventBuilder::Finalise(){
     std::map<uint64_t,int> TankOrphansWaveMap;
     std::map<uint64_t,std::vector<std::vector<int>>> TankOrphansChannels;
     std::map<uint64_t,double> TankOrphansTDiff;
+    if (save_raw_data){
+    if (verbosity > 4) std::cout <<"ANNIEEventBuilder: Remaining in progress events in Finalise step: "<<InProgressTankEvents->size()<<std::endl;
     for(std::pair<uint64_t,std::map<std::vector<int>, std::vector<uint16_t>>> apair : *InProgressTankEvents){
       uint64_t PMTCounterTimeNs = apair.first;
       std::map<std::vector<int>, std::vector<uint16_t>> aWaveMap = apair.second;
@@ -1009,6 +1057,21 @@ bool ANNIEEventBuilder::Finalise(){
         TankOrphansChannels.emplace(PMTCounterTimeNs,aWaveMapChannels);
 	TankOrphansTDiff.emplace(PMTCounterTimeNs,0.);
       }
+    }
+    }else {
+    if (verbosity > 4) std::cout <<"ANNIEEventBuilder: Remaining in progress events in Finalise step: "<<InProgressHits->size()<<std::endl;
+    for(std::pair<uint64_t,std::map<unsigned long, std::vector<Hit>>*> apair : *InProgressHits){
+      uint64_t PMTCounterTimeNs = apair.first;
+      std::map<unsigned long, std::vector<Hit>> *aHitMap = apair.second;
+      std::vector<unsigned long> aChkey = InProgressChkey->at(PMTCounterTimeNs);
+      if(aChkey.size() < (NumWavesInCompleteSet)){
+        TankOrphans.emplace(PMTCounterTimeNs,"incomplete_tank_event");
+        TankOrphansWaveMap.emplace(PMTCounterTimeNs,aChkey.size());
+        std::vector<std::vector<int>> aWaveMapChannels = GetChannelsFromHitMap(aChkey);
+        TankOrphansChannels.emplace(PMTCounterTimeNs,aWaveMapChannels);
+	TankOrphansTDiff.emplace(PMTCounterTimeNs,0.);
+      }
+    }
     }
     this->MoveToOrphanage(TankOrphans, TankOrphansWaveMap, TankOrphansChannels, TankOrphansTDiff, MRDOrphans, MRDOrphansTDiff, CTCOrphans);
     this->ManageOrphanage();
@@ -1033,6 +1096,7 @@ void ANNIEEventBuilder::ProcessNewCTCData(){
   for(std::pair<uint64_t,std::vector<uint32_t>> apair : *TimeToTriggerWordMap){
     uint64_t CTCTimeStamp = apair.first;
     myTimeStream.CTCTimestamps.push_back(CTCTimeStamp);
+    if (myTimeStream.TriggerTimestampDisk.count(CTCTimeStamp)==0) myTimeStream.TriggerTimestampDisk.emplace(CTCTimeStamp,false);
     std::vector<uint32_t> CTCWordVector = apair.second;
     for (int i_ctcword=0; i_ctcword < (int) CTCWordVector.size(); i_ctcword++){
       uint32_t CTCWord = CTCWordVector.at(i_ctcword);
@@ -1041,7 +1105,7 @@ void ANNIEEventBuilder::ProcessNewCTCData(){
   }
   RemoveDuplicates(myTimeStream.CTCTimestamps);
 
-  std::cout <<"ProcessNewCTCData, aux"<<std::endl;
+  //std::cout <<"ProcessNewCTCData, aux"<<std::endl;
   std::vector<uint64_t> aux_trigword_delete;
   //Read in auxiliary triggerword information, use information from trigword 40 (min-bias) & 41 (CC-extended readout)
   for (std::pair<uint64_t,std::vector<uint32_t>> apair : *TimeToTriggerWordMapComplete){
@@ -1066,6 +1130,8 @@ void ANNIEEventBuilder::ProcessNewCTCData(){
   for (int i_ctc=0; i_ctc < (int) myTimeStream.CTCTimestamps.size(); i_ctc++){
     //std::cout <<"i_ctc: "<<i_ctc<<std::endl;
     uint64_t CTCTimeStamp = myTimeStream.CTCTimestamps.at(i_ctc);
+    if (myTimeStream.TriggerTimestampDisk[CTCTimeStamp]) continue;
+    if (CTCExtended.count(CTCTimeStamp)>0) continue;
     int extended_information=0;
     //std::cout <<"CTCTimestamp: "<<CTCTimeStamp<<std::endl;
     for (int i_ext=0; i_ext < (int) myTimeStream.CTCTimestampsExtendedCC.size(); i_ext++){
@@ -1080,6 +1146,13 @@ void ANNIEEventBuilder::ProcessNewCTCData(){
     }
     CTCExtended.emplace(CTCTimeStamp,extended_information);
   }
+
+  //Delete extended CTC information
+  myTimeStream.CTCTimestampsExtendedCC.clear();
+  myTimeStream.CTCTimestampsExtendedNC.clear();
+
+  m_data->CStore.Set("NewCTCDataAvailable",false);
+
   return;
 }
 
@@ -1087,7 +1160,7 @@ void ANNIEEventBuilder::ProcessNewMRDData(){
   for(std::pair<uint64_t,std::vector<std::pair<unsigned long,int>>> apair : myMRDMaps.MRDEvents){
     uint64_t MRDTimeStamp = apair.first;
     myTimeStream.BeamMRDTimestamps.push_back(MRDTimeStamp);
-    if(verbosity>5)std::cout << "MRDTIMESTAMPTRIGTYPE," << MRDTimeStamp << "," << myMRDMaps.MRDTriggerTypeMap.at(MRDTimeStamp) << std::endl;
+    if(verbosity>5) std::cout << "MRDTIMESTAMPTRIGTYPE," << MRDTimeStamp << "," << myMRDMaps.MRDTriggerTypeMap.at(MRDTimeStamp) << std::endl;
   }
   RemoveDuplicates(myTimeStream.BeamMRDTimestamps);
   return;
@@ -1095,7 +1168,14 @@ void ANNIEEventBuilder::ProcessNewMRDData(){
 
 void ANNIEEventBuilder::ProcessNewTankPMTData(){
   //Check if any In-progress tank events now have all waveforms
-  m_data->CStore.Get("InProgressTankEvents",InProgressTankEvents);
+  if (save_raw_data) m_data->CStore.Get("InProgressTankEvents",InProgressTankEvents);
+  else {
+    m_data->CStore.Get("InProgressHits",InProgressHits);
+    m_data->CStore.Get("InProgressHitsAux",InProgressHitsAux);
+    m_data->CStore.Get("InProgressRecoADCHits",InProgressRecoADCHits);
+    m_data->CStore.Get("InProgressRecoADCHitsAux",InProgressRecoADCHitsAux);
+    m_data->CStore.Get("InProgressChkey",InProgressChkey);
+  }
   std::vector<uint64_t> InProgressTankEventsToDelete;
   std::map<uint64_t,std::string> TankOrphans;
   std::map<uint64_t,std::string> MRDOrphans;
@@ -1106,19 +1186,29 @@ void ANNIEEventBuilder::ProcessNewTankPMTData(){
   std::map<uint64_t,double> TankOrphansTDiff;
 
   if(verbosity>5) std::cout << "ANNIEEventBuilder Tool: Processing new tank data " << std::endl;
+
+  /// ------------------------------
+  ///---------RAW DATA case ----------
+  /// -------------------------------
+  
+  if (save_raw_data){
   if (verbosity > 4) std::cout <<"ANNIEEventBuilder Tool: Number of InProgressTankEvents: "<<InProgressTankEvents->size()<<std::endl;
   for(std::pair<uint64_t,std::map<std::vector<int>, std::vector<uint16_t>>> apair : *InProgressTankEvents){
     uint64_t PMTCounterTimeNs = apair.first;
     std::map<std::vector<int>, std::vector<uint16_t>> aWaveMap = apair.second;
     if(verbosity>4) std::cout << "TS: " << PMTCounterTimeNs <<", Number of waves for this counter: " << aWaveMap.size() << std::endl;
+    //std::cout <<"MaxObservedNumWaves: "<<MaxObservedNumWaves<<std::endl;
 
     if ((int) aWaveMap.size() > MaxObservedNumWaves) MaxObservedNumWaves = int(aWaveMap.size());
     //Check if maximum number of observed waveform size is systematically smaller than the set value
-    if (InProgressTankEvents->size() > 200 && MaxObservedNumWaves < NumWavesInCompleteSet && !max_waves_adapted) {
+    if (InProgressTankEvents->size() > 200 && MaxObservedNumWaves < NumWavesInCompleteSet && !max_waves_adapted && MaxObservedNumWaves >=130) {
       Log("ANNIEEventBuilder tool: Did not observe any waveforms for the total of "+std::to_string(NumWavesInCompleteSet)+" channels so far. Reducing minimum value to observed maximum number of waveforms >>> "+std::to_string(MaxObservedNumWaves)+" <<<",v_error,verbosity);
       NumWavesInCompleteSet = MaxObservedNumWaves;
       max_waves_adapted = true;	//only adapt nominal number of waves per event once per part file (should not change)
     }
+
+    //In case we find a larger number of waveforms at a later stage, update NumWavesInCompleteSet
+    if (MaxObservedNumWaves > NumWavesInCompleteSet) NumWavesInCompleteSet = MaxObservedNumWaves;
 
     //Push back any new timestamps, then remove duplicates in the end
     if(PMTCounterTimeNs>NewestTankTimestamp){
@@ -1144,6 +1234,7 @@ void ANNIEEventBuilder::ProcessNewTankPMTData(){
       }    
       FinishedTankEventsSampleSize->emplace(PMTCounterTimeNs,aWaveMapSampleSize);
       if (save_raw_data) myTimeStream.BeamTankTimestamps.push_back(PMTCounterTimeNs);
+      //myTimeStream.BeamTankTimestamps.push_back(PMTCounterTimeNs);
       //Put PMT timestamp into the timestamp set for this run.
       if(verbosity>4) std::cout << "Finished waveset has clock counter: " << PMTCounterTimeNs << std::endl;
       InProgressTankEventsToDelete.push_back(PMTCounterTimeNs);
@@ -1155,7 +1246,7 @@ void ANNIEEventBuilder::ProcessNewTankPMTData(){
 
     //If this InProgressTankEvent is too old, clear it
     //out from all TankTimestamp maps
-    if(OrphanOldTankTimestamps && ((NewestTankTimestamp - PMTCounterTimeNs) > OldTimestampThreshold*1E9)){
+    if(OrphanOldTankTimestamps && ((NewestTankTimestamp - PMTCounterTimeNs) > OldTimestampThreshold*1E9) && (aWaveMap.size() < NumWavesInCompleteSet-1) && (InProgressTankEvents->size() > 250)){
       InProgressTankEventsToDelete.push_back(PMTCounterTimeNs);
       TankOrphans.emplace(PMTCounterTimeNs,"incomplete_tank_event");
       TankOrphansWaveMap.emplace(PMTCounterTimeNs,aWaveMap.size());
@@ -1166,6 +1257,8 @@ void ANNIEEventBuilder::ProcessNewTankPMTData(){
   }
   RemoveDuplicates(myTimeStream.BeamTankTimestamps);
  
+  std::cout <<"myTimeStream.BeamTankTimestamps.size(): "<<myTimeStream.BeamTankTimestamps.size()<<", FinishedTankEventsSampleSize size: "<<FinishedTankEventsSampleSize->size()<<std::endl;
+
   slowest_in_progress_tank = NewestTankTimestamp;
   for (std::pair<uint64_t,int> almost_complete_waveform : AlmostCompleteWaveforms){
     if (almost_complete_waveform.first < slowest_in_progress_tank) slowest_in_progress_tank = almost_complete_waveform.first;
@@ -1179,13 +1272,115 @@ void ANNIEEventBuilder::ProcessNewTankPMTData(){
   if(verbosity>3)std::cout << "Now erasing finished timestamps from InProgressTankEvents" << std::endl;
   for (unsigned int j=0; j< InProgressTankEventsToDelete.size(); j++){
     InProgressTankEvents->erase(InProgressTankEventsToDelete.at(j));
+    
   }
   if(verbosity>3) std::cout << "Current number of unfinished PMT Waveforms: " << InProgressTankEvents->size() << std::endl;
+  } else {
 
+  // --------------------------
+  // ---Processed hits case---
+  // --------------------------
+
+  //for (std::pair<uint64_t,std::map<unsigned long,std::vector<Hit>>*> apair : *InProgressHits){
+  for (std::pair<uint64_t,std::vector<unsigned long>> apair : *InProgressChkey){
+    uint64_t PMTCounterTimeNs = apair.first; 
+    //std::map<unsigned long,std::vector<Hit>>* aHit = apair.second;
+    // std::vector<unsigned long> aChkey = InProgressChkey->at(PMTCounterTimeNs);
+    std::vector<unsigned long> aChkey = apair.second;
+    if ((int) aChkey.size() > MaxObservedNumWaves) MaxObservedNumWaves = int(aChkey.size());
+    if(verbosity>4) {
+      std::cout << "TS: " << PMTCounterTimeNs <<", Number of waves for this counter: " << aChkey.size() << std::endl;
+      std::cout <<"MaxObservedNumWaves: "<<MaxObservedNumWaves<<std::endl;
+    }
+    if (InProgressChkey->size()>500 && MaxObservedNumWaves < NumWavesInCompleteSet && !max_waves_adapted && MaxObservedNumWaves >= 130){
+      Log("ANNIEEventBuilder tool: Did not observe any waveforms for the total of "+std::to_string(NumWavesInCompleteSet)+" channels so far. Reducing minimum value to observed maximum number of waveforms >>> "+std::to_string(MaxObservedNumWaves)+" <<<",v_error,verbosity);
+      NumWavesInCompleteSet = MaxObservedNumWaves;
+      max_waves_adapted = true; //only adapt nominal number of waves per event once per part file (should not change)
+    }
+    //In case we find a larger number of waveforms at a later stage, update NumWavesInCompleteSet
+    if (MaxObservedNumWaves > NumWavesInCompleteSet) NumWavesInCompleteSet = MaxObservedNumWaves;
+
+    //Push back any new timestamps, then remove duplicates in the end
+    if(PMTCounterTimeNs>NewestTankTimestamp){
+      NewestTankTimestamp = PMTCounterTimeNs;
+      if(verbosity>3)std::cout << "TANKTIMESTAMP," << PMTCounterTimeNs << std::endl;
+    }
+    if (aChkey.size() == (NumWavesInCompleteSet-1)){
+      if (AlmostCompleteWaveforms.find(PMTCounterTimeNs)!=AlmostCompleteWaveforms.end()) AlmostCompleteWaveforms[PMTCounterTimeNs]++;
+      else AlmostCompleteWaveforms.emplace(PMTCounterTimeNs,0);
+      if (verbosity > 4) std::cout <<"ANNIEEventBuilder Tool: AlmostCompleteWaveforms for PMTCounterTimeNs: "<<PMTCounterTimeNs<<": "<<AlmostCompleteWaveforms.at(PMTCounterTimeNs)<<std::endl;
+    }
+    //Events and delete it from the in-progress events
+    int NumTankPMTChannels = TankPMTCrateSpaceToChannelNumMap.size();
+    int NumAuxChannels = AuxCrateSpaceToChannelNumMap.size();
+    if(aChkey.size() >= (NumWavesInCompleteSet) || ((aChkey.size() == NumWavesInCompleteSet-1) && (AlmostCompleteWaveforms.at(PMTCounterTimeNs)>=5))){
+      //FinishedHits->emplace(PMTCounterTimeNs,aHit); --> moved to FetchWaveformsHits
+      std::map<std::vector<int>,int> aWaveMapSampleSize;
+      for (int i_ch=0; i_ch < (int) aChkey.size(); i_ch++){
+        unsigned long temp_chkey = aChkey.at(i_ch);
+        std::vector<int> temp_channel;
+        if (ChannelNumToTankPMTCrateSpaceMap.count(int(temp_chkey))>0) temp_channel = ChannelNumToTankPMTCrateSpaceMap[int(temp_chkey)];
+        else if (AuxChannelNumToCrateSpaceMap.count(int(temp_chkey))>0) temp_channel = AuxChannelNumToCrateSpaceMap[int(temp_chkey)];
+	else Log("ANNIEEventBuilder tool: Did not find channelkey "+std::to_string(temp_chkey)+" in ChannelNumToTankPMTCrateSpaceMap or AuxChannelNumToCrateSpaceMap! Can't convert to electronics space",v_error,verbosity);
+        int temp_size = int(aChkey.size());
+        int temp_cardid;
+        this->ElectronicsSpacetoCardID(temp_channel.at(0),temp_channel.at(1),temp_cardid);
+        std::vector<int> temp_cardch{temp_cardid,temp_channel.at(2)};
+        aWaveMapSampleSize.emplace(temp_cardch,temp_size);
+      }    
+      FinishedTankEventsSampleSize->emplace(PMTCounterTimeNs,aWaveMapSampleSize);
+      myTimeStream.BeamTankTimestamps.push_back(PMTCounterTimeNs);
+      //Put PMT timestamp into the timestamp set for this run.
+      if(verbosity>4) std::cout << "Finished waveset has clock counter: " << PMTCounterTimeNs << std::endl;
+      InProgressTankEventsToDelete.push_back(PMTCounterTimeNs);
+    }
+
+    if ((aChkey.size() == NumWavesInCompleteSet-1)){
+      if (AlmostCompleteWaveforms.at(PMTCounterTimeNs)>=5) AlmostCompleteWaveforms.erase(PMTCounterTimeNs);
+    }
+
+    //If this InProgressTankEvent is too old, clear it
+    //out from all TankTimestamp maps
+    if(OrphanOldTankTimestamps && ((NewestTankTimestamp - PMTCounterTimeNs) > OldTimestampThreshold*1E9) && (aChkey.size() < NumWavesInCompleteSet-1) && (InProgressChkey->size() > 1200)){
+      InProgressTankEventsToDelete.push_back(PMTCounterTimeNs);
+      TankOrphans.emplace(PMTCounterTimeNs,"incomplete_tank_event");
+      TankOrphansWaveMap.emplace(PMTCounterTimeNs,aChkey.size());
+      std::vector<std::vector<int>> aWaveMapChannels = GetChannelsFromHitMap(aChkey);
+      TankOrphansChannels.emplace(PMTCounterTimeNs,aWaveMapChannels);
+      TankOrphansTDiff.emplace(PMTCounterTimeNs,0);
+    }
+  }
+  RemoveDuplicates(myTimeStream.BeamTankTimestamps);
+ 
+  //std::cout <<"myTimeStream.BeamTankTimestamps.size(): "<<myTimeStream.BeamTankTimestamps.size()<<", FinishedTankEventsSampleSize size: "<<FinishedTankEventsSampleSize->size()<<std::endl;
+
+  slowest_in_progress_tank = NewestTankTimestamp;
+  for (std::pair<uint64_t,int> almost_complete_waveform : AlmostCompleteWaveforms){
+    if (almost_complete_waveform.first < slowest_in_progress_tank) slowest_in_progress_tank = almost_complete_waveform.first;
+  }
+
+  // move abandoned in-progress events to the orphanage
+  this->MoveToOrphanage(TankOrphans, TankOrphansWaveMap, TankOrphansChannels, TankOrphansTDiff, MRDOrphans, MRDOrphansTDiff, CTCOrphans);
+ 
+  //Since timestamp pairing has been done for finished Tank Hits,
+  //Erase the finished Tank Events from the InProgressHitsMap
+  if(verbosity>3)std::cout << "Now erasing finished timestamps from InProgressHits" << std::endl;
+  //std::cout <<"InProgressChkey size: "<<InProgressChkey->size()<<", InProgressHits size: "<<InProgressHits->size()<<std::endl;
+  for (unsigned int j=0; j< InProgressTankEventsToDelete.size(); j++){
+    //std::cout <<"Delete InProgressHits & InProgressChkey for TS "<<InProgressTankEventsToDelete.at(j)<<std::endl;
+    //InProgressHits->erase(InProgressTankEventsToDelete.at(j));
+    InProgressChkey->erase(InProgressTankEventsToDelete.at(j));
+  }
+  //std::cout <<"After erase: InProgressChkey size: "<<InProgressChkey->size()<<", InProgressHits size: "<<InProgressHits->size()<<std::endl;
+  if(verbosity>3) std::cout << "Current number of unfinished PMT Waveforms: " << InProgressChkey->size() << std::endl;
+
+  }// End of processing InProgressHits
+  
+  /*
   if (!save_raw_data){
     m_data->CStore.Set("FinishedTankEvents",FinishedTankEvents);
     m_data->CStore.Set("NewTankEvents",true);
-  }
+  }*/
 
   return;
 }
@@ -1268,6 +1463,7 @@ std::map<uint64_t,std::map<std::string,uint64_t>> ANNIEEventBuilder::PairCTCCosm
     myTimeStream.CTCTimestamps.erase(std::remove(myTimeStream.CTCTimestamps.begin(),
         myTimeStream.CTCTimestamps.end(),BuiltCTCs.at(j)), 
         myTimeStream.CTCTimestamps.end());
+    myTimeStream.TriggerTimestampDisk.erase(BuiltCTCs.at(j));
   }
 
   //Move MRD timestamps with no pairs to the orphanage.  Just empty Tank and CTC vectors for 
@@ -1321,6 +1517,7 @@ std::map<uint64_t,std::map<std::string,uint64_t>> ANNIEEventBuilder::MergeStream
   if (force_matching && (BuildType == "Tank" || BuildType == "TankAndMRD" || BuildType == "TankAndCTC" || BuildType == "TankAndMRDAndCTC")){
     std::vector<uint64_t> InProgressTankEventsToDelete;
     //Add remaining Tank timestamps that have almost complete waveforms
+    if (save_raw_data){
     for(std::pair<uint64_t,std::map<std::vector<int>, std::vector<uint16_t>>> apair : *InProgressTankEvents){
       uint64_t PMTCounterTimeNs = apair.first;
       std::map<std::vector<int>, std::vector<uint16_t>> aWaveMap = apair.second;
@@ -1354,6 +1551,52 @@ std::map<uint64_t,std::map<std::string,uint64_t>> ANNIEEventBuilder::MergeStream
     for (unsigned int j=0; j< InProgressTankEventsToDelete.size(); j++){
       InProgressTankEvents->erase(InProgressTankEventsToDelete.at(j));
     }
+  } else { //Processed data case
+    for (std::pair<uint64_t,std::map<unsigned long,std::vector<Hit>>*> apair : *InProgressHits){
+    uint64_t PMTCounterTimeNs = apair.first;
+    std::map<unsigned long,std::vector<Hit>>* aHit = apair.second;
+    std::vector<unsigned long> aChkey = InProgressChkey->at(PMTCounterTimeNs);
+ 
+    if(PMTCounterTimeNs>NewestTankTimestamp){
+      NewestTankTimestamp = PMTCounterTimeNs;
+      if(verbosity>3)std::cout << "TANKTIMESTAMP," << PMTCounterTimeNs << std::endl;
+    }
+
+    int NumTankPMTChannels = TankPMTCrateSpaceToChannelNumMap.size();
+    int NumAuxChannels = AuxCrateSpaceToChannelNumMap.size();
+    if(aChkey.size() >= (NumWavesInCompleteSet-1)){
+      FinishedHits->emplace(PMTCounterTimeNs,aHit);
+      std::map<std::vector<int>,int> aWaveMapSampleSize;
+        for (int i_ch=0; i_ch < (int) aChkey.size(); i_ch++){
+          unsigned long temp_chkey = aChkey.at(i_ch);
+          std::vector<int> temp_channel;
+          if (ChannelNumToTankPMTCrateSpaceMap.count(int(temp_chkey))>0) temp_channel = ChannelNumToTankPMTCrateSpaceMap[int(temp_chkey)];
+          else if (AuxChannelNumToCrateSpaceMap.count(int(temp_chkey))>0) temp_channel = AuxChannelNumToCrateSpaceMap[int(temp_chkey)];
+          else Log("ANNIEEventBuilder tool: Did not find channelkey "+std::to_string(temp_chkey)+" in ChannelNumToTankPMTCrateSpaceMap or AuxChannelNumToCrateSpaceMap! Can't convert to electronics space",v_error,verbosity);
+          int temp_size = int(aChkey.size());
+          int temp_cardid;
+          this->ElectronicsSpacetoCardID(temp_channel.at(0),temp_channel.at(1),temp_cardid);
+          std::vector<int> temp_cardch{temp_cardid,temp_channel.at(2)};
+          aWaveMapSampleSize.emplace(temp_cardch,temp_size);
+        }
+        FinishedTankEventsSampleSize->emplace(PMTCounterTimeNs,aWaveMapSampleSize);
+        myTimeStream.BeamTankTimestamps.push_back(PMTCounterTimeNs);
+        if(verbosity>4) std::cout << "Finished waveset has clock counter: " << PMTCounterTimeNs << std::endl;
+        InProgressTankEventsToDelete.push_back(PMTCounterTimeNs);
+      }
+    }
+    RemoveDuplicates(myTimeStream.BeamTankTimestamps);
+
+    for (unsigned int j=0; j< InProgressTankEventsToDelete.size(); j++){
+      //delete InProgressHits->at(InProgressTankEventsToDelete.at(j));
+      //delete InProgressHitsAux->at(InProgressTankEventsToDelete.at(j));
+      InProgressHits->erase(InProgressTankEventsToDelete.at(j));
+      InProgressHitsAux->erase(InProgressTankEventsToDelete.at(j));
+      InProgressRecoADCHits->erase(InProgressTankEventsToDelete.at(j));
+      InProgressRecoADCHitsAux->erase(InProgressTankEventsToDelete.at(j));
+      InProgressChkey->erase(InProgressTankEventsToDelete.at(j));
+    }
+  }
   }
 
   // only attempt matching of any kind on timestamps older than the newest timestamp we have
@@ -1369,12 +1612,12 @@ std::map<uint64_t,std::map<std::string,uint64_t>> ANNIEEventBuilder::MergeStream
       if((aCtcTS>max_timestamp)&&(!force_matching)) continue; // don't try to match this just yet
       double TSDiff =  static_cast<double>(aMrdTS) - 
                        static_cast<double>(aCtcTS);
-      if(verbosity>4) std::cout << "MRDTS - CTCTS in nanoseconds is " << TSDiff << std::endl;
+      if(verbosity>9) std::cout << "MRDTS - CTCTS in nanoseconds is " << TSDiff << std::endl;
       if(TSDiff>CTCMRDTimeTolerance){ // MRD timestamp is later than CTC timestamp; try next CTC timestamp
         TSDiff_current = TSDiff;
         continue;
       } else if (TSDiff<(-1.*static_cast<double>(CTCMRDTimeTolerance))){ //We've crossed past where a pair would be found
-        if(verbosity>4) std::cout << "NO CTC STAMP FOUND MATCHING MRD STAMP... MRD TO ORPHANAGE" << std::endl;
+        if(verbosity>9) std::cout << "NO CTC STAMP FOUND MATCHING MRD STAMP... MRD TO ORPHANAGE" << std::endl;
         MRDOrphans.emplace(aMrdTS,"mrd_beam_no_ctc");
         double min_tdiff = (fabs(TSDiff)<fabs(TSDiff_current))? TSDiff:TSDiff_current;
         MRDOrphansTDiff.emplace(aMrdTS,min_tdiff);
@@ -1397,12 +1640,12 @@ std::map<uint64_t,std::map<std::string,uint64_t>> ANNIEEventBuilder::MergeStream
       if((aCtcTS>max_timestamp)&&(!force_matching)) continue; // don't try to match just yet
       double TSDiff =  static_cast<double>(aTankTS) - 
                        static_cast<double>(aCtcTS);
-      if(verbosity>4) std::cout << "TankTS - CTCTS in nanoseconds is " << TSDiff << std::endl;
+      if(verbosity>9) std::cout << "TankTS - CTCTS in nanoseconds is " << TSDiff << std::endl;
       if(TSDiff>CTCTankTimeTolerance){ // Need to move forward in indices
         TSDiff_current = TSDiff;
         continue;
       } else if (TSDiff<(-1.*static_cast<double>(CTCTankTimeTolerance))){ //We've crossed past where a pair would be found
-        if(verbosity>4) {
+        if(verbosity>9) {
           std::cout << "NO CTC STAMP FOUND MATCHING TANK STAMP... TANK TO ORPHANAGE" << std::endl;
           std::cout <<"TSDiff: "<<TSDiff<<std::endl;
         }
@@ -1522,14 +1765,16 @@ std::map<uint64_t,std::map<std::string,uint64_t>> ANNIEEventBuilder::MergeStream
     myTimeStream.CTCTimestamps.erase(std::remove(myTimeStream.CTCTimestamps.begin(),
         myTimeStream.CTCTimestamps.end(),BuiltCTCs.at(j)), 
         myTimeStream.CTCTimestamps.end());
+    myTimeStream.TriggerTimestampDisk.erase(BuiltCTCs.at(j));
   }
 
   //If the toolchain is stopping, move remaining incomplete PMT timestamps to orphanage
   if (force_matching) {
     if (verbosity > 2) std::cout <<"ANNIEEventBuilder Tool: Force matching at the end of toolchain, get InProgressTankEvents"<<std::endl;
     if(OrphanOldTankTimestamps && (BuildType == "Tank" || BuildType == "TankAndMRD" || BuildType == "TankAndCTC" || BuildType == "TankAndMRDAndCTC")){
-      if (verbosity > 2) std::cout <<"ANNIEEventBuilder Tool: Size of InprogressTankEvents: "<<InProgressTankEvents->size()<<std::endl;
       std::vector<uint64_t> InProgressTankEventsToDelete;
+      if (save_raw_data){
+      if (verbosity > 2) std::cout <<"ANNIEEventBuilder Tool: Size of InprogressTankEvents: "<<InProgressTankEvents->size()<<std::endl;
       for(std::pair<uint64_t,std::map<std::vector<int>, std::vector<uint16_t>>> apair : *InProgressTankEvents){
         uint64_t PMTCounterTimeNs = apair.first;
         if (verbosity > 4) std::cout <<"ANNIEEventBuilder Tool: PMTCounterTimeNs of InProgressTankEvent: "<<PMTCounterTimeNs<<std::endl;
@@ -1546,12 +1791,47 @@ std::map<uint64_t,std::map<std::string,uint64_t>> ANNIEEventBuilder::MergeStream
       for (int i_del=0; i_del < (int) InProgressTankEventsToDelete.size(); i_del++){
         InProgressTankEvents->erase(InProgressTankEventsToDelete.at(i_del));
       }
+    } else {
+      if (verbosity > 2) std::cout <<"ANNIEEventBuilder Tool: Size of InprogressHits: "<<InProgressHits->size()<<std::endl;
+      for (std::pair<uint64_t, std::map<unsigned long, std::vector<Hit>>*> apair : *InProgressHits){
+        //std::cout <<"Get PMTCounterTimeNs"<<std::endl;
+        uint64_t PMTCounterTimeNs = apair.first;
+        if (verbosity > 4) std::cout <<"ANNIEEventBuilder Tool: PMTCounterTimeNs of InProgressHits: "<<PMTCounterTimeNs<<std::endl;
+	//std::cout <<"Get aHitMap"<<std::endl;
+        std::map<unsigned long, std::vector<Hit>>* aHitMap = apair.second;
+        //std::cout <<"Get achkey"<<std::endl;
+        std::vector<unsigned long> aChkey = InProgressChkey->at(PMTCounterTimeNs);
+        //std::cout <<"Check if size < NumWavesInCompleteSet"<<std::endl;
+        if(aChkey.size() < (NumWavesInCompleteSet)){
+          //std::cout <<"yes"<<std::endl;
+          InProgressTankEventsToDelete.push_back(PMTCounterTimeNs);
+          TankOrphans.emplace(PMTCounterTimeNs,"incomplete_tank_event");
+          TankOrphansWaveMap.emplace(PMTCounterTimeNs,aChkey.size());
+          std::vector<std::vector<int>> aWaveMapChannels = GetChannelsFromHitMap(aChkey);
+          TankOrphansChannels.emplace(PMTCounterTimeNs,aWaveMapChannels);
+          TankOrphansTDiff.emplace(PMTCounterTimeNs,0.);
+        }
+      }
+      for (int i_del=0; i_del < (int) InProgressTankEventsToDelete.size(); i_del++){
+        //std::cout <<"Delete "<<i_del<<" / "<<InProgressTankEventsToDelete.size()<<" timestamps"<<std::endl;
+	//delete InProgressHits->at(InProgressTankEventsToDelete.at(i_del));
+	//delete InProgressHitsAux->at(InProgressTankEventsToDelete.at(i_del));
+        InProgressHits->erase(InProgressTankEventsToDelete.at(i_del));
+        InProgressHitsAux->erase(InProgressTankEventsToDelete.at(i_del));
+        InProgressRecoADCHits->erase(InProgressTankEventsToDelete.at(i_del));
+        InProgressRecoADCHitsAux->erase(InProgressTankEventsToDelete.at(i_del));
+        InProgressChkey->erase(InProgressTankEventsToDelete.at(i_del));
+      }
     }
+   }
   }
 
+  //std::cout <<"MoveToOrphanage"<<std::endl;
   //Move timestamps with no pairs to the orphanage
   this->MoveToOrphanage(TankOrphans, TankOrphansWaveMap, TankOrphansChannels, TankOrphansTDiff, MRDOrphans, MRDOrphansTDiff, CTCOrphans);
+  //std::cout <<"ManageOprhanae"<<std::endl;
   this->ManageOrphanage();
+
   Log("ANNIEEventBuilder: Returning from Merging the Streams",v_debug,verbosity);
 
   return BuildMap;
@@ -1581,6 +1861,7 @@ void ANNIEEventBuilder::MoveToOrphanage(std::map<uint64_t, std::string> TankOrph
     myTimeStream.CTCTimestamps.erase(std::remove(myTimeStream.CTCTimestamps.begin(),
          myTimeStream.CTCTimestamps.end(),CTCOrphanStamp), 
          myTimeStream.CTCTimestamps.end());
+    myTimeStream.TriggerTimestampDisk.erase(CTCOrphanStamp);
   }
   
   for(auto&& nextorphan : TankOrphans){
@@ -1604,6 +1885,7 @@ void ANNIEEventBuilder::MoveToOrphanage(std::map<uint64_t, std::string> TankOrph
                myTimeStream.BeamTankTimestamps.end(),TankOrphanStamp), 
                myTimeStream.BeamTankTimestamps.end());
   }
+  //std::cout <<"Move to orphanage: BeamTankTimestamps.size(): "<<myTimeStream.BeamTankTimestamps.size()<<std::endl;
 
   for(auto&& nextorphan : MRDOrphans){
     uint64_t MrdOrphanStamp = nextorphan.first;
@@ -1634,25 +1916,31 @@ void ANNIEEventBuilder::ManageOrphanage(){
   // build a fixed type that says what data was present:
   // MRD? CTC? Tank? Right now without merging it'll be just one,
   // but later if we're able to merge orphans it could be more than one
-//  std::cout<<"Going to manage the orphanage"<<std::endl;
+  // std::cout<<"Going to manage the orphanage"<<std::endl;
   
+  //std::cout <<"ManageOrphanage"<<std::endl;
   std::string OrphanFile = SavePath + OrphanFileBase +"_"+BuildType+"_R" + to_string(CurrentRunNum) + 
       "S" + to_string(CurrentSubRunNum) + "p" + to_string(CurrentPartNum);
 //  std::cout<<"orphans will be saved to "<<OrphanFile<<std::endl;
 //  std::cout<<"OrphanStore is "<<OrphanStore<<std::endl;
   
-//  std::cout<<"managing tank orphans"<<std::endl;
+  // std::cout<<"managing tank orphans"<<std::endl;
   //For now, just save orphans then delete them
+  
   for(auto&& nextorphan : myOrphanage.OrphanTankTimestamps){
+    // std::cout <<"Setting orphan info for timestamp "<<nextorphan.first<<std::endl;
     // copy the orphan info into OrphanStore
 //    std::cout<<"set tank orphan info into OrphanStore"<<std::endl;
+    //std::cout <<"eventtype"<<std::endl;
     OrphanStore->Set("EventType",std::string("Tank"));
+    //std::cout <<"timestamp"<<std::endl;
     OrphanStore->Set("Timestamp",nextorphan.first);
     OrphanStore->Set("Reason",nextorphan.second.at("reason"));
     OrphanStore->Set("NumWaves",std::stoi(nextorphan.second.at("numwaves")));
     OrphanStore->Set("TriggerWord",-1);
     OrphanStore->Set("Info",nextorphan.second); // redundant for now, but maybe we'll add more info later
     std::vector<std::vector<int>> CurrentWaveMapChannels = myOrphanage.OrphanTankTimestampsChannels[nextorphan.first];
+    //std::cout <<"waveform channels"<<std::endl;
     OrphanStore->Set("WaveformChannels",CurrentWaveMapChannels);
     //Convert to channelkeys for convenience
     std::vector<unsigned long> CurrentWaveMapChankeys;
@@ -1661,6 +1949,7 @@ void ANNIEEventBuilder::ManageOrphanage(){
       unsigned long current_chankey = TankPMTCrateSpaceToChannelNumMap[current_cratespace];
       CurrentWaveMapChankeys.push_back(current_chankey);
     }
+    //std::cout <<"WaveformChankeys"<<std::endl;
     OrphanStore->Set("WaveformChankeys",CurrentWaveMapChankeys);
     double orphan_min_tdiff = myOrphanage.OrphanTankTimestampsTDiff[nextorphan.first];
     OrphanStore->Set("MinTDiff",orphan_min_tdiff);
@@ -1671,24 +1960,38 @@ void ANNIEEventBuilder::ManageOrphanage(){
 //    std::cout<<"orphanage has been deleted, erasing the orphan from the FinishedTankEvents"<<std::endl;
     
     // cleanup from events to process
-    FinishedTankEventsSampleSize->erase(nextorphan.first);
-    if (save_raw_data) FinishedTankEvents->erase(nextorphan.first);
-    else {
+    if (std::find(myTimeStream.BeamTankTimestamps.begin(),myTimeStream.BeamTankTimestamps.end(),nextorphan.first)==myTimeStream.BeamTankTimestamps.end()) {
+   // std::cout <<"FinishedTankEvents erase"<<std::endl;
+    if (FinishedTankEventsSampleSize->count(nextorphan.first)>0) FinishedTankEventsSampleSize->erase(nextorphan.first);
+    //std::cout <<"erasing done"<<std::endl;
+    if (!(FinishedTankEvents->count(nextorphan.first)>0)) std::cout <<"no nextorphan.first in FinishedTankEvents"<<std::endl;
+    if (save_raw_data && FinishedTankEvents->count(nextorphan.first)>0) {
+        //std::cout <<"Start erasing FinishedTankEvents"<<std::endl;
+	FinishedTankEvents->erase(nextorphan.first);
+    	//std::cout <<"FinishedTankEvents done"<<std::endl;
+    }
+    else if (FinishedHits->count(nextorphan.first)>0){
+        //std::cout <<"FinishedHits erase"<<std::endl;
         /*FinishedRawWaveforms->erase(nextorphan.first);
         FinishedRawWaveformsAux->erase(nextorphan.first);
         FinishedCalibratedWaveforms->erase(nextorphan.first);
         FinishedCalibratedWaveformsAux->erase(nextorphan.first);*/
+	//delete FinishedHits->at(nextorphan.first);
+	//delete FinishedHitsAux->at(nextorphan.first);
         FinishedHits->erase(nextorphan.first);
         FinishedHitsAux->erase(nextorphan.first);
         FinishedRecoADCHits->erase(nextorphan.first);
         FinishedRecoADCHitsAux->erase(nextorphan.first);
         FinishedRawAcqSize->erase(nextorphan.first);
+        //std::cout <<"FinishedHits erase done"<<std::endl;
+    }
     }    
+    //std::cout <<"Set FinishedTankEvents"<<std::endl;
     m_data->CStore.Set("FinishedTankEvents",FinishedTankEvents);
 
-//    std::cout<<"done, move to next orphan"<<std::endl;
+   // std::cout<<"done, move to next orphan"<<std::endl;
   }
-//  std::cout<<"managing mrd orphans"<<std::endl;
+  //std::cout<<"managing mrd orphans"<<std::endl;
   for(auto&& nextorphan : myOrphanage.OrphanMRDTimestamps){
     // copy the orphan info into OrphanStore
     OrphanStore->Set("EventType",std::string("MRD"));
@@ -1712,7 +2015,7 @@ void ANNIEEventBuilder::ManageOrphanage(){
     myMRDMaps.MRDBeamLoopbackMap.erase(nextorphan.first);
     myMRDMaps.MRDCosmicLoopbackMap.erase(nextorphan.first);
   }
-//  std::cout<<"Managing CTC orphans"<<std::endl;
+ // std::cout<<"Managing CTC orphans"<<std::endl;
   for(auto&& nextorphan : myOrphanage.OrphanCTCTimestamps){
     // copy the orphan info into OrphanStore
     OrphanStore->Set("EventType",std::string("CTC"));
@@ -1731,8 +2034,12 @@ void ANNIEEventBuilder::ManageOrphanage(){
     
     // cleanup from events to process
     TimeToTriggerWordMap->erase(nextorphan.first);
+    CTCExtended.erase(nextorphan.first);
+    if (store_beam_status){
+      if (BeamStatusMap->count(nextorphan.first)>0) BeamStatusMap->erase(nextorphan.first);
+    }
   }
-//  std::cout<<"all CTC orphans handled, clearing the orphan timestamps"<<std::endl;
+ // std::cout<<"all CTC orphans handled, clearing the orphan timestamps"<<std::endl;
   
   myOrphanage.OrphanTankTimestamps.clear();
   myOrphanage.OrphanTankTimestampsChannels.clear();
@@ -2007,6 +2314,20 @@ std::vector<std::vector<int>> ANNIEEventBuilder::GetChannelsFromWaveMap(std::map
     return CrateSpaceVector;
 }
 
+std::vector<std::vector<int>> ANNIEEventBuilder::GetChannelsFromHitMap(std::vector<unsigned long> HitMap){
+
+   std::vector<std::vector<int>> CrateSpaceVector;
+   for (int i_vec=0; i_vec < (int) HitMap.size(); i_vec++){
+     unsigned long temp_chkey = HitMap.at(i_vec);
+     std::vector<int> temp_channel;
+     if (ChannelNumToTankPMTCrateSpaceMap.count(int(temp_chkey))>0) temp_channel = ChannelNumToTankPMTCrateSpaceMap[int(temp_chkey)];
+     else if (AuxChannelNumToCrateSpaceMap.count(int(temp_chkey))>0) temp_channel = AuxChannelNumToCrateSpaceMap[int(temp_chkey)];
+     else Log("ANNIEEventBuilder tool: Did not find channelkey "+std::to_string(temp_chkey)+" in ChannelNumToTankPMTCrateSpaceMap or AuxChannelNumToCrateSpaceMap! Can't convert to electronics space",v_error,verbosity);
+     CrateSpaceVector.push_back(temp_channel);
+   }
+
+   return CrateSpaceVector;
+}
 void ANNIEEventBuilder::SaveEntryToFile(int RunNum, int SubRunNum, int PartNum)
 {
   /*if(verbosity>4)*/ std::cout << "ANNIEEvent: Saving ANNIEEvent entry"+to_string(ANNIEEventNum) << std::endl;
@@ -2030,6 +2351,13 @@ void ANNIEEventBuilder::CardIDToElectronicsSpace(int CardID,
   return;
 }
 
+void ANNIEEventBuilder::ElectronicsSpacetoCardID(int CrateNum, int SlotNum, int &CardID){
+
+  CardID = CrateNum*1000+SlotNum;
+  return;
+
+}
+
 void ANNIEEventBuilder::OpenNewANNIEEvent(int RunNum, int SubRunNum, int PartNum, uint64_t StarT, int RunT){
   uint64_t StarTime;
   int RunType;
@@ -2039,6 +2367,9 @@ void ANNIEEventBuilder::OpenNewANNIEEvent(int RunNum, int SubRunNum, int PartNum
   ANNIEEvent->Close();
   ANNIEEvent->Delete();
   delete ANNIEEvent; ANNIEEvent = new BoostStore(false,2);
+  OrphanStore->Close();
+  OrphanStore->Delete();
+  delete OrphanStore; OrphanStore = new BoostStore(false,2);
   CurrentRunNum = RunNum;
   CurrentSubRunNum = SubRunNum;
   CurrentPartNum = PartNum;
@@ -2049,6 +2380,7 @@ void ANNIEEventBuilder::OpenNewANNIEEvent(int RunNum, int SubRunNum, int PartNum
 
 bool ANNIEEventBuilder::FetchWaveformsHits(){
 
+  std::cout <<"FetchWaveformHits"<<std::endl;
   bool has_calibrated = false;
   bool has_hits = false;
   m_data->CStore.Get("NewCalibratedData",has_calibrated);
@@ -2058,6 +2390,20 @@ bool ANNIEEventBuilder::FetchWaveformsHits(){
     //No calibrated waveforms or hits available
     return false;
   }
+
+  //Get In Progress Hits
+ 
+  //std::cout <<"Get InProgressRecoADCHits, FinishedRawAcqSize, ..."<<std::endl;
+  m_data->CStore.Get("InProgressHits",InProgressHits);
+  m_data->CStore.Get("InProgressRecoADCHits",InProgressRecoADCHits);
+  m_data->CStore.Get("InProgressHitsAux",InProgressHitsAux);
+  m_data->CStore.Get("InProgressRecoADCHitsAux",InProgressRecoADCHitsAux);
+  m_data->CStore.Get("FinishedRawAcqSize",FinishedRawAcqSize);	//Filled in PhaseIIADCCalibrator
+  //std::cout <<"Got them"<<std::endl;
+  std::cout <<"InProgressRecoADCHits size (event builder): "<<InProgressRecoADCHits->size()<<std::endl;
+  //std::cout <<"InProgressRecoADCHitsAux size (event builder): "<<InProgressRecoADCHitsAux->size()<<std::endl;
+  //std::cout <<"InProgressHitsAux size (event builder): "<<InProgressHitsAux->size()<<std::endl;
+
 /*
   // Get calibrated waveforms related objects --> not needed?
   m_data->CStore.Get("FinishedRawWaveforms",FinishedRawWaveforms);
@@ -2066,19 +2412,51 @@ bool ANNIEEventBuilder::FetchWaveformsHits(){
   m_data->CStore.Get("FinishedCalibratedWaveformsAux",FinishedCalibratedWaveformsAux); 
 */
   // Get Hits related objects
+  /*
   m_data->CStore.Get("FinishedHits",FinishedHits);
   m_data->CStore.Get("FinishedRecoADCHits",FinishedRecoADCHits);
   m_data->CStore.Get("FinishedHitsAux",FinishedHitsAux);
   m_data->CStore.Get("FinishedRecoADCHitsAux",FinishedRecoADCHitsAux);
   m_data->CStore.Get("FinishedRawAcqSize",FinishedRawAcqSize);
+*/
 
   // Fill BeamTankTimestamps vector
+  /*
   for (std::pair<uint64_t,std::map<unsigned long,std::vector<Hit>>*> apair : *FinishedHits){
     uint64_t aTimestamp = apair.first;
     myTimeStream.BeamTankTimestamps.push_back(aTimestamp);
+  }*/
+
+  // Fill all FinishedHits objects
+  //std::cout <<"Fill FinishedHits objects"<<std::endl;
+  std::vector<uint64_t> TimeStampsToDelete;
+  for (int i_t = 0; i_t < myTimeStream.BeamTankTimestamps.size(); i_t++){
+    uint64_t aTimestamp = myTimeStream.BeamTankTimestamps.at(i_t);
+    //std::cout <<"FinishedRecoADCHits, timestamp: "<<aTimestamp<<std::endl;
+    //std::cout <<"InProgressRecoADCHits count Timestamp: "<<InProgressRecoADCHits->count(aTimestamp)<<std::endl;
+    //std::cout <<"InProgressRecoADCHitsAux count Timestamp: "<<InProgressRecoADCHitsAux->count(aTimestamp)<<std::endl;
+    //std::cout <<"InProgressHitsAux count Timestamp: "<<InProgressHitsAux->count(aTimestamp)<<std::endl;
+    if (FinishedRecoADCHits->count(aTimestamp)==0){
+      FinishedHits->emplace(aTimestamp,InProgressHits->at(aTimestamp));
+      FinishedRecoADCHits->emplace(aTimestamp,InProgressRecoADCHits->at(aTimestamp));
+      FinishedRecoADCHitsAux->emplace(aTimestamp,InProgressRecoADCHitsAux->at(aTimestamp));
+      FinishedHitsAux->emplace(aTimestamp,InProgressHitsAux->at(aTimestamp));
+      myTimeStream.BeamTankTimestamps.push_back(aTimestamp);
+      TimeStampsToDelete.push_back(aTimestamp);
+    }
   }
 
   RemoveDuplicates(myTimeStream.BeamTankTimestamps);
+
+  std::cout <<"Erase processed timestamps"<<std::endl;
+  for (int i_del=0; i_del < (int) TimeStampsToDelete.size(); i_del++){
+    //delete InProgressHits->at(TimeStampsToDelete.at(i_del));
+    //delete InProgressHitsAux->at(TimeStampsToDelete.at(i_del));
+    InProgressHits->erase(TimeStampsToDelete.at(i_del));
+    InProgressRecoADCHits->erase(TimeStampsToDelete.at(i_del));
+    InProgressRecoADCHitsAux->erase(TimeStampsToDelete.at(i_del));
+    InProgressHitsAux->erase(TimeStampsToDelete.at(i_del));
+  }
 
   std::cout <<"FinishedHits.size(): "<<FinishedHits->size()<<", BeamTankTimestamps.size(): "<<myTimeStream.BeamTankTimestamps.size()<<", FinishedTankEventsSampleSize.size(): "<<FinishedTankEventsSampleSize->size()<<std::endl;
 
@@ -2086,5 +2464,416 @@ bool ANNIEEventBuilder::FetchWaveformsHits(){
   m_data->CStore.Set("NewHitsData",false);
 
   return true;
+
+}
+
+void ANNIEEventBuilder::ManageTempData(){
+
+  std::cout <<"Manage TempData"<<std::endl;
+
+  //Check the sizes of our maps in progress
+
+  //VME map
+  int size_vme = InProgressHits->size();
+
+  //MRD map
+  int size_mrd = myMRDMaps.MRDEvents.size();
+
+  //Trigger map
+  int size_trigger = TimeToTriggerWordMap->size();
+
+  //BeamStatus map
+  int size_beamstatus = 0;
+  if (store_beam_status) size_beamstatus = BeamStatusMap->size();
+
+
+  std::cout <<"Current in progress map sizes (VME/MRD/Trigger/Beam): "<< size_vme <<" / "<<size_mrd << " / "<<size_trigger<<" / "<<size_beamstatus<<std::endl;
+
+  std::string temp_store = "TempStore";
+  BoostStore TempStore;
+  bool get_store = TempStore.Initialise(temp_store.c_str());
+
+  std::vector<uint64_t> TriggerTimesToDelete;
+  std::vector<uint64_t> BeamTimesToDelete;
+  std::vector<uint64_t> MRDTimesToDelete;
+
+  //Too many unfinished VME waveforms?
+  if (size_vme > MaxVME){
+    std::cout <<"ANNIEEventBuilder tool: Number of entries in VME data ("<<size_vme<<") > "<<MaxVME<<"! Off-load some data to disk"<<std::endl;
+    std::map<uint64_t,std::map<unsigned long, std::vector<Hit>>*> TempHits;
+    std::map<uint64_t,std::map<unsigned long, std::vector<Hit>>*> TempHitsAux;
+    std::map<uint64_t,std::map<unsigned long, std::vector<std::vector<ADCPulse>>>> TempRecoADCHits;
+    std::map<uint64_t,std::map<unsigned long, std::vector<std::vector<ADCPulse>>>> TempRecoADCHitsAux;
+    if (get_store){
+      TempStore.Get("TempHits",TempHits);
+     /* for (std::pair<uint64_t,std::map<unsigned long,std::vector<Hit>>*> apair: TempHits){
+        uint64_t temp_timestamp = apair.first;
+        std::cout <<"TS "<<temp_timestamp<<": Got TempHits with size: "<<apair.second->size()<<std::endl;
+        for (std::pair<unsigned long,std::vector<Hit>> ach : *apair.second){
+          std::cout <<"chkey: "<<ach.first<<", size: "<<ach.second.size()<<std::endl;
+        }
+      }*/
+      TempStore.Get("TempHitsAux",TempHitsAux);
+      TempStore.Get("TempRecoADCHits",TempRecoADCHits);
+      TempStore.Get("TempRecoADCHitsAux",TempRecoADCHitsAux);
+    }
+    int i_vme = 0;
+    for (std::pair<uint64_t,std::map<unsigned long,std::vector<Hit>>*> apair : *InProgressHits){
+      if (i_vme > size_vme - MaxVME/2) continue;      //Store 1000 events in file
+      uint64_t temp_timestamp = apair.first;
+      if (TempHits.count(temp_timestamp)==0){
+        TempHits.emplace(temp_timestamp,apair.second);
+        /*std::cout <<"TS "<<temp_timestamp<<": Emplaced TempHits with size: "<<apair.second->size()<<std::endl;
+        for (std::pair<unsigned long,std::vector<Hit>> ach : *apair.second){
+	  std::cout <<"chkey: "<<ach.first<<", size: "<<ach.second.size()<<std::endl;
+        }*/
+        TempHitsAux.emplace(temp_timestamp,InProgressHitsAux->at(temp_timestamp));
+        TempRecoADCHits.emplace(temp_timestamp,InProgressRecoADCHits->at(temp_timestamp));
+        TempRecoADCHitsAux.emplace(temp_timestamp,InProgressRecoADCHitsAux->at(temp_timestamp));
+      } else {
+         std::map<unsigned long, std::vector<Hit>>* ahit = TempHits.at(temp_timestamp);
+         std::map<unsigned long, std::vector<Hit>>* ahit_aux = TempHitsAux.at(temp_timestamp);
+         std::map<unsigned long, std::vector<std::vector<ADCPulse>>> arecoadchits = TempRecoADCHits.at(temp_timestamp);
+         std::map<unsigned long, std::vector<std::vector<ADCPulse>>> arecoadchits_aux = TempRecoADCHitsAux.at(temp_timestamp);
+         for (std::pair<unsigned long,std::vector<std::vector<ADCPulse>>> ach : InProgressRecoADCHits->at(temp_timestamp)){
+            unsigned long temp_channel = ach.first;
+           // std::cout <<"arecoadc"<<std::endl;
+            //std::cout <<"count chankey: "<<arecoadchits.count(temp_channel)<<std::endl;
+            arecoadchits.emplace(temp_channel,InProgressRecoADCHits->at(temp_timestamp).at(temp_channel));
+          }
+          for (std::pair<unsigned long,std::vector<std::vector<ADCPulse>>> ach : InProgressRecoADCHitsAux->at(temp_timestamp)){
+            unsigned long temp_channel = ach.first;
+           // std::cout <<"arecoadc_aux"<<std::endl;
+           // std::cout <<"count chankey: "<<arecoadchits_aux.count(temp_channel)<<std::endl;
+            arecoadchits_aux.emplace(temp_channel,InProgressRecoADCHitsAux->at(temp_timestamp).at(temp_channel));
+          }
+          for (std::pair<unsigned long,std::vector<Hit>> ach : *InProgressHits->at(temp_timestamp)){
+            unsigned long temp_channel = ach.first;
+          //  std::cout <<"chankey: "<<temp_channel<<std::endl;
+           // std::cout <<"ahit"<<std::endl;
+           // std::cout <<"count chankey: "<<ahit->count(temp_channel)<<std::endl;
+            ahit->emplace(temp_channel,InProgressHits->at(temp_timestamp)->at(temp_channel));
+          }
+          for (std::pair<unsigned long,std::vector<Hit>> ach : *InProgressHitsAux->at(temp_timestamp)){
+            unsigned long temp_channel = ach.first;
+          //  std::cout <<"ahit_aux"<<std::endl;
+          //  std::cout <<"count chankey: "<<ahit_aux->count(temp_channel)<<std::endl;
+            ahit_aux->emplace(temp_channel,InProgressHitsAux->at(temp_timestamp)->at(temp_channel));
+          }
+
+     //     std::cout <<"Save the value in the temp map (TempHits, ...)"<<std::endl;
+          TempHits.at(temp_timestamp) = ahit;
+          TempHitsAux.at(temp_timestamp) = ahit_aux;
+          TempRecoADCHits.at(temp_timestamp) = arecoadchits;
+          TempRecoADCHitsAux.at(temp_timestamp) = arecoadchits_aux;
+        }
+
+      BeamTimesToDelete.push_back(temp_timestamp);
+      i_vme++;
+    }
+   // std::cout <<"Store TempHits with size "<<TempHits.size()<<std::endl;
+   // std::cout <<"Store TempRecoADCHits with size "<<TempRecoADCHits.size()<<std::endl;
+    TempStore.Set("TempHits",TempHits);
+    TempStore.Set("TempHitsAux",TempHitsAux);
+    TempStore.Set("TempRecoADCHits",TempRecoADCHits);
+    TempStore.Set("TempRecoADCHitsAux",TempRecoADCHitsAux);
+    //Save Temporary data
+    TempStore.Save(temp_store.c_str());
+  }
+
+  for (int i_vme = 0; i_vme < (int) BeamTimesToDelete.size(); i_vme++){
+    uint64_t timestamp = BeamTimesToDelete.at(i_vme);
+    //delete InProgressHits->at(timestamp);
+    //delete InProgressHitsAux->at(timestamp);
+    InProgressHits->erase(timestamp);
+    InProgressHitsAux->erase(timestamp);
+    InProgressRecoADCHits->erase(timestamp);
+    InProgressRecoADCHitsAux->erase(timestamp);
+  }
+
+  //Too many MRD timestamps?
+
+  if (size_mrd > MaxMRD){
+    std::cout <<"ANNIEEventBuilder tool: Number of entries in MRD data ("<<size_mrd<<") > "<<MaxMRD<<"! Off-load some data to disk"<<std::endl;
+    std::map<uint64_t,std::vector<std::pair<unsigned long,int>>> TempMRDEvents;
+    std::map<uint64_t,std::string> TempMRDTriggerTypeMap;
+    std::map<uint64_t,int> TempMRDBeamLoopbackMap;
+    std::map<uint64_t,int> TempMRDCosmicLoopbackMap;
+    if (get_store){
+      TempStore.Get("TempMRDEvents",TempMRDEvents);
+      TempStore.Get("TempMRDTriggerTypeMap",TempMRDTriggerTypeMap);
+      TempStore.Get("TempMRDBeamLoopbackMap",TempMRDBeamLoopbackMap);
+      TempStore.Get("TempMRDCosmicLoopbackMap",TempMRDCosmicLoopbackMap);
+    }
+    int i_mrd = 0;
+    for (std::pair<uint64_t,std::vector<std::pair<unsigned long,int>>> apair : myMRDMaps.MRDEvents){
+      if (i_mrd > size_mrd - MaxMRD/2) continue;      //Store 1000 events in file
+      uint64_t temp_timestamp = apair.first;
+      TempMRDEvents.emplace(temp_timestamp,apair.second);
+      TempMRDTriggerTypeMap.emplace(temp_timestamp,myMRDMaps.MRDTriggerTypeMap.at(temp_timestamp));
+      TempMRDBeamLoopbackMap.emplace(temp_timestamp,myMRDMaps.MRDBeamLoopbackMap.at(temp_timestamp));
+      TempMRDCosmicLoopbackMap.emplace(temp_timestamp,myMRDMaps.MRDCosmicLoopbackMap.at(temp_timestamp));
+
+      MRDTimesToDelete.push_back(temp_timestamp);
+      i_mrd++;
+    }
+    TempStore.Set("TempMRDEvents",TempMRDEvents);
+    TempStore.Set("TempMRDTriggerTypeMap",TempMRDTriggerTypeMap);
+    TempStore.Set("TempMRDBeamLoopbackMap",TempMRDBeamLoopbackMap);
+    TempStore.Set("TempMRDCosmicLoopbackMap",TempMRDCosmicLoopbackMap);
+    //Save Temporary data
+    TempStore.Save(temp_store.c_str());
+  }
+
+  for (int i_mrd = 0; i_mrd < (int) MRDTimesToDelete.size(); i_mrd++){
+    uint64_t timestamp = MRDTimesToDelete.at(i_mrd);
+    myMRDMaps.MRDEvents.erase(timestamp);
+    myMRDMaps.MRDTriggerTypeMap.erase(timestamp);
+    myMRDMaps.MRDBeamLoopbackMap.erase(timestamp);
+    myMRDMaps.MRDCosmicLoopbackMap.erase(timestamp);
+  }
+
+
+  //Too many trigger timestamps?
+
+  if (size_trigger > MaxTrigger){
+    std::cout <<"ANNIEEventBuilder tool: Number of entries in Trigger data ("<<size_trigger<<") > "<<MaxTrigger<<"! Off-load some data to disk"<<std::endl;
+    std::map<uint64_t,std::vector<uint32_t>> TempTrigger;
+    std::map<uint64_t,int> TempCTCExtended;
+    std::map<uint64_t,BeamStatus> TempBeamStatus;
+    if (get_store){
+      std::cout <<"Get TempTrigger"<<std::endl;
+      TempStore.Get("TempTrigger",TempTrigger);
+      std::cout <<"Get TempCTCExtended"<<std::endl;
+      TempStore.Get("TempCTCExtended",TempCTCExtended);
+      std::cout <<"Get TempBeamStatus"<<std::endl;
+      if (store_beam_status) TempStore.Get("TempBeamStatus",TempBeamStatus);
+    }
+    int i_trig = 0;
+    std::cout <<"TimeToTriggerWordMap size: "<<TimeToTriggerWordMap->size()<<", CTC size: "<<CTCExtended.size()<<", BeamStatus size: "<<BeamStatusMap->size()<<std::endl;
+    for (std::pair<uint64_t,std::vector<uint32_t>> apair : *TimeToTriggerWordMap){
+ //     std::cout <<"i_trig: "<<i_trig<<std::endl;
+      if (i_trig > (size_trigger - MaxTrigger/2)) continue;	//Store 1000 events in file
+      uint64_t temp_timestamp = apair.first;
+      TempTrigger.emplace(temp_timestamp,TimeToTriggerWordMap->at(temp_timestamp));
+      if (CTCExtended.count(temp_timestamp) >0) TempCTCExtended.emplace(temp_timestamp,CTCExtended.at(temp_timestamp));
+      if (store_beam_status) TempBeamStatus.emplace(temp_timestamp,BeamStatusMap->at(temp_timestamp));
+      myTimeStream.TriggerTimestampDisk[temp_timestamp]=true;
+      TriggerTimesToDelete.push_back(temp_timestamp);
+      i_trig++;
+    }
+    std::cout <<"Set TempTrigger (size "<<TempTrigger.size()<<")"<<std::endl;
+    TempStore.Set("TempTrigger",TempTrigger);
+    std::cout <<"Set TempCTCExtended (size "<<TempCTCExtended.size()<<")"<<std::endl;
+    TempStore.Set("TempCTCExtended",TempCTCExtended);
+    std::cout <<"Set TempBeamStatus (size "<<TempBeamStatus.size()<<")"<<std::endl;
+    if (store_beam_status) TempStore.Set("TempBeamStatus",TempBeamStatus);
+    //Save Temporary data
+    TempStore.Save(temp_store.c_str());
+  }
+
+  for (int i_trig = 0; i_trig < (int) TriggerTimesToDelete.size(); i_trig++){
+    uint64_t timestamp = TriggerTimesToDelete.at(i_trig);
+   // std::cout <<"Delete timestamp "<<timestamp<<std::endl;
+    TimeToTriggerWordMap->erase(timestamp);
+    if (CTCExtended.count(timestamp)>0) CTCExtended.erase(timestamp);
+    if (store_beam_status) BeamStatusMap->erase(timestamp);
+  }
+  
+  size_vme = InProgressHits->size();
+  size_mrd = myMRDMaps.MRDEvents.size();
+  size_trigger = TimeToTriggerWordMap->size();
+  int size_trigger2 = CTCExtended.size();
+  if (store_beam_status) size_beamstatus = BeamStatusMap->size();
+  
+  std::cout <<"Off-loading data to disk done! In progress map sizes (VME/MRD/Trigger/Beam): "<< size_vme <<" / "<<size_mrd << " / "<<size_trigger<<" / "<<size_trigger2<<" / "<<size_beamstatus<<std::endl;
+
+  //Close TempStore
+  TempStore.Close();
+  //Delete entry from memory
+  TempStore.Delete();
+
+}
+
+void ANNIEEventBuilder::GetTempData(){
+
+  std::cout <<"ANNIEEventBuilder: Get Temp data objects"<<std::endl;
+
+  //Check if there's a TempStore file
+  BoostStore TempStore;
+  std::string temp_store = "TempStore";
+  bool get_store = TempStore.Initialise(temp_store.c_str());
+ 
+  if (!get_store) return;
+
+  //VME map
+  int size_vme = InProgressHits->size();
+
+  //MRD map
+  int size_mrd = myMRDMaps.MRDEvents.size();
+
+  //Trigger map
+  int size_trigger = TimeToTriggerWordMap->size();
+
+  //BeamStatus map
+  int size_beamstatus = 0;
+  if (store_beam_status) size_beamstatus = BeamStatusMap->size();
+  std::cout <<"Map sizes before loading stored data from disk (VME/MRD/Trigger/Beam): "<< size_vme <<" / "<<size_mrd << " / "<<size_trigger<<" / "<<size_beamstatus<<std::endl;
+
+  //VME data
+  std::map<uint64_t,std::map<unsigned long, std::vector<Hit>>*> TempHits;
+  std::map<uint64_t,std::map<unsigned long, std::vector<Hit>>*> TempHitsAux;
+  std::map<uint64_t,std::map<unsigned long, std::vector<std::vector<ADCPulse>>>> TempRecoADCHits;
+  std::map<uint64_t,std::map<unsigned long, std::vector<std::vector<ADCPulse>>>> TempRecoADCHitsAux;
+  bool got_vme = TempStore.Get("TempHits",TempHits);
+  TempStore.Get("TempHitsAux",TempHitsAux);
+  TempStore.Get("TempRecoADCHits",TempRecoADCHits);
+  TempStore.Get("TempRecoADCHitsAux",TempRecoADCHitsAux);
+
+  if (got_vme){
+   // std::cout <<"GET VME"<<std::endl;
+   // std::cout <<"Got TempHits with size "<<TempHits.size()<<std::endl;
+   // std::cout <<"Got TempRecoADCHits with size "<<TempRecoADCHits.size()<<std::endl;
+    std::vector<uint64_t> VMETimesToDelete;
+    for (std::pair<uint64_t,std::map<unsigned long,std::vector<Hit>>*> apair : TempHits){
+      uint64_t temp_timestamp = apair.first;
+      if (InProgressHits->count(temp_timestamp)==0){
+     //   std::cout <<"Get VME data (timestamp not present)"<<std::endl;
+        InProgressHits->emplace(temp_timestamp,apair.second);
+        InProgressHitsAux->emplace(temp_timestamp,TempHitsAux.at(temp_timestamp));
+        InProgressRecoADCHits->emplace(temp_timestamp,TempRecoADCHits.at(temp_timestamp));
+        InProgressRecoADCHitsAux->emplace(temp_timestamp,TempRecoADCHitsAux.at(temp_timestamp));
+      } else {
+   //     std::cout <<"Get VME data (timestamp present)"<<std::endl;
+   //     std::cout <<"Get ahit, athi_aux, ..."<<std::endl;
+        std::map<unsigned long,std::vector<Hit>>* ahit = InProgressHits->at(temp_timestamp);
+        std::map<unsigned long,std::vector<Hit>>* ahit_aux = InProgressHitsAux->at(temp_timestamp);
+        std::map<unsigned long,std::vector<std::vector<ADCPulse>>> arecoadc = InProgressRecoADCHits->at(temp_timestamp);
+        std::map<unsigned long,std::vector<std::vector<ADCPulse>>> arecoadc_aux = InProgressRecoADCHitsAux->at(temp_timestamp);
+   //     std::cout <<"Sizes: "<<ahit->size()<<", "<<ahit_aux->size()<<", "<< arecoadc.size()<<", "<<arecoadc_aux.size()<<std::endl; 
+   //     std::cout <<"fill up ahit, ahit_aux, ..."<<std::endl;
+        for (std::pair<unsigned long,std::vector<std::vector<ADCPulse>>> ach : TempRecoADCHits.at(temp_timestamp)){
+          unsigned long temp_channel = ach.first;
+      //    std::cout <<"chankey: "<<temp_channel<<std::endl;
+      //    std::cout <<"arecoadc"<<std::endl;
+      //    std::cout <<"count chankey: "<<arecoadc.count(temp_channel)<<std::endl;
+          arecoadc.emplace(temp_channel,TempRecoADCHits.at(temp_timestamp).at(temp_channel));
+        }
+        for (std::pair<unsigned long,std::vector<std::vector<ADCPulse>>> ach : TempRecoADCHitsAux.at(temp_timestamp)){
+          unsigned long temp_channel = ach.first;
+       //   std::cout <<"arecoadc_aux"<<std::endl;
+       //   std::cout <<"count chankey: "<<arecoadc_aux.count(temp_channel)<<std::endl;
+          arecoadc_aux.emplace(temp_channel,TempRecoADCHitsAux.at(temp_timestamp).at(temp_channel));
+        }
+        for (std::pair<unsigned long,std::vector<Hit>> ach : *TempHits.at(temp_timestamp)){
+          unsigned long temp_channel = ach.first;
+       //   std::cout <<"ahit"<<std::endl;
+       //   std::cout <<"count chankey: "<<ahit->count(temp_channel)<<std::endl;
+          ahit->emplace(temp_channel,TempHits.at(temp_timestamp)->at(temp_channel));
+        }
+        for (std::pair<unsigned long,std::vector<Hit>> ach : *TempHitsAux.at(temp_timestamp)){
+          unsigned long temp_channel = ach.first;
+     //     std::cout <<"ahit_aux"<<std::endl;
+       //   std::cout <<"count chankey: "<<ahit_aux->count(temp_channel)<<std::endl;
+          ahit_aux->emplace(temp_channel,TempHitsAux.at(temp_timestamp)->at(temp_channel));
+        }
+   //     std::cout <<"Re-set the value in the map (InProgressHits, ...)"<<std::endl;
+        InProgressHits->at(temp_timestamp) = ahit;
+        InProgressHitsAux->at(temp_timestamp) = ahit_aux;
+        InProgressRecoADCHits->at(temp_timestamp) = arecoadc;
+        InProgressRecoADCHitsAux->at(temp_timestamp) = arecoadc_aux;
+      }
+      VMETimesToDelete.push_back(temp_timestamp);
+    }
+    for (int i_mrd = 0; i_mrd < (int) VMETimesToDelete.size(); i_mrd++){
+      uint64_t timestamp = VMETimesToDelete.at(i_mrd);
+      TempHits.erase(timestamp);
+      TempHitsAux.erase(timestamp);
+      TempRecoADCHits.erase(timestamp);
+      TempRecoADCHitsAux.erase(timestamp);
+    }
+    TempStore.Set("TempHits",TempHits);
+    TempStore.Set("TempHitsAux",TempHitsAux);
+    TempStore.Set("TempRecoADCHits",TempRecoADCHits);
+    TempStore.Set("TempRecoADCHitsAux",TempRecoADCHitsAux);
+  }
+
+  //MRD data
+  std::map<uint64_t,std::vector<std::pair<unsigned long,int>>> TempMRDEvents;
+  std::map<uint64_t,std::string> TempMRDTriggerTypeMap;
+  std::map<uint64_t,int> TempMRDBeamLoopbackMap;
+  std::map<uint64_t,int> TempMRDCosmicLoopbackMap;
+  bool got_mrd = TempStore.Get("TempMRDEvents",TempMRDEvents);
+  TempStore.Get("TempMRDTriggerTypeMap",TempMRDTriggerTypeMap);
+  TempStore.Get("TempMRDBeamLoopbackMap",TempMRDBeamLoopbackMap);
+  TempStore.Get("TempMRDCosmicLoopbackMap",TempMRDCosmicLoopbackMap);
+
+  if (got_mrd){
+   // std::cout <<"GET MRD"<<std::endl;
+    std::vector<uint64_t> MRDTimesToDelete;
+    for (std::pair<uint64_t,std::vector<std::pair<unsigned long,int>>> apair : TempMRDEvents){
+      uint64_t temp_timestamp = apair.first;
+      myMRDMaps.MRDEvents.emplace(temp_timestamp,apair.second);
+      myMRDMaps.MRDTriggerTypeMap.emplace(temp_timestamp,TempMRDTriggerTypeMap.at(temp_timestamp));
+      myMRDMaps.MRDBeamLoopbackMap.emplace(temp_timestamp,TempMRDBeamLoopbackMap.at(temp_timestamp));
+      myMRDMaps.MRDCosmicLoopbackMap.emplace(temp_timestamp,TempMRDCosmicLoopbackMap.at(temp_timestamp));
+      MRDTimesToDelete.push_back(temp_timestamp);
+    } 
+    for (int i_mrd = 0; i_mrd < (int) MRDTimesToDelete.size(); i_mrd++){
+      uint64_t timestamp = MRDTimesToDelete.at(i_mrd);
+      TempMRDEvents.erase(timestamp);
+      TempMRDTriggerTypeMap.erase(timestamp);
+      TempMRDBeamLoopbackMap.erase(timestamp);
+      TempMRDCosmicLoopbackMap.erase(timestamp);
+    }
+    TempStore.Set("TempMRDEvents",TempMRDEvents);
+    TempStore.Set("TempMRDTriggerTypeMap",TempMRDTriggerTypeMap);
+    TempStore.Set("TempMRDBeamLoopbackMap",TempMRDBeamLoopbackMap);
+    TempStore.Set("TempMRDCosmicLoopbackMap",TempMRDCosmicLoopbackMap);
+  }
+
+  //Trigger data
+  std::map<uint64_t,std::vector<uint32_t>> TempTrigger;
+  std::map<uint64_t,int> TempCTCExtended;
+  std::map<uint64_t,BeamStatus> TempBeamStatus;
+  bool got_trig = TempStore.Get("TempTrigger",TempTrigger);
+  TempStore.Get("TempCTCExtended",TempCTCExtended);
+  if (store_beam_status) TempStore.Get("TempBeamStatus",TempBeamStatus);
+
+  if (got_trig){
+    std::cout <<"GET TRIGGER"<<std::endl;
+    std::vector<uint64_t> TriggerTimesToDelete;
+    std::cout <<"TempTrigger.size(): "<<TempTrigger.size()<<", TempCTCExtended.size(): "<<TempCTCExtended.size()<<", TempBeamStatus.size(): "<<TempBeamStatus.size()<<std::endl;
+    for (std::pair<uint64_t,std::vector<uint32_t>> apair : TempTrigger){
+      uint64_t temp_timestamp = apair.first;
+      TimeToTriggerWordMap->emplace(temp_timestamp,TempTrigger.at(temp_timestamp));
+      CTCExtended.emplace(temp_timestamp,TempCTCExtended.at(temp_timestamp));
+      if (store_beam_status) BeamStatusMap->emplace(temp_timestamp,TempBeamStatus.at(temp_timestamp));
+      myTimeStream.TriggerTimestampDisk[temp_timestamp]=false;
+      TriggerTimesToDelete.push_back(temp_timestamp);
+    }
+    for (int i_trig = 0; i_trig < (int) TriggerTimesToDelete.size(); i_trig++){
+      uint64_t timestamp = TriggerTimesToDelete.at(i_trig);
+      TempTrigger.erase(timestamp);
+      TempCTCExtended.erase(timestamp);
+      if (store_beam_status) TempBeamStatus.erase(timestamp);
+    }
+    TempStore.Set("TempTrigger",TempTrigger);
+    TempStore.Set("TempCTCExtended",TempCTCExtended);
+    if (store_beam_status) TempStore.Set("TempBeamStatus",TempBeamStatus);
+  }
+
+  // Save TempStore to disk
+  TempStore.Save(temp_store.c_str());
+
+  size_vme = InProgressHits->size();
+  size_mrd = myMRDMaps.MRDEvents.size();
+  size_trigger = TimeToTriggerWordMap->size();
+  if (store_beam_status) size_beamstatus = BeamStatusMap->size();
+
+  std::cout <<"Loading data from disk to memory done! In progress map sizes (VME/MRD/Trigger/Beam): "<< size_vme <<" / "<<size_mrd << " / "<<size_trigger<<" / "<<size_beamstatus<<std::endl;
+
+  //Close TempStore
+  TempStore.Close();
 
 }
