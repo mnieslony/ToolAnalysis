@@ -64,6 +64,8 @@ bool EventSelector::Initialise(std::string configfile, DataModel &data){
   vec_pmtclusters_time = new std::vector<double>; 
   vec_mrdclusters_time = new std::vector<double>; 
 
+  m_data->CStore.Get("ChannelNumToTankPMTSPEChargeMap",ChannelNumToTankPMTSPEChargeMap);
+
   return true;
 }
 
@@ -595,11 +597,11 @@ bool EventSelector::EventSelectionByPMTMRDCoinc() {
 
   bool prompt_cluster = false;
   double pmt_time = 0;
-
+  double max_charge = 0;
+  int n_hits = 0;
 
   if (fIsMC){
     if (m_all_clusters_MC->size()){
-      double max_charge = 0;
       double cluster_time;
       for(std::pair<double,std::vector<MCHit>>&& apair : *m_all_clusters_MC){
         std::vector<MCHit>&MCHits = apair.second;
@@ -622,7 +624,6 @@ bool EventSelector::EventSelectionByPMTMRDCoinc() {
     }
   } else {
     if (m_all_clusters->size()){
-      double max_charge = 0;
       double cluster_time;
       for(std::pair<double,std::vector<Hit>>&& apair : *m_all_clusters){
         std::vector<Hit>&Hits = apair.second;
@@ -630,7 +631,9 @@ bool EventSelector::EventSelectionByPMTMRDCoinc() {
         double charge_temp = 0;
         for (unsigned int i_hit = 0; i_hit < Hits.size(); i_hit++){
           time_temp+=Hits.at(i_hit).GetTime();
-          charge_temp+=Hits.at(i_hit).GetCharge();
+          int tube = Hits.at(i_hit).GetTubeId();
+          double charge_pe = Hits.at(i_hit).GetCharge()/ChannelNumToTankPMTSPEChargeMap->at(tube);
+          charge_temp+=charge_pe;
         }
         if (Hits.size()>0) time_temp/=Hits.size();
         vec_pmtclusters_charge->push_back(charge_temp);
@@ -640,10 +643,14 @@ bool EventSelector::EventSelectionByPMTMRDCoinc() {
           max_charge = charge_temp;
           prompt_cluster = true;
           pmt_time = time_temp;
+          n_hits = int(Hits.size());
         }
       }
     }
   }
+
+  std::cout <<"Maximum charge in PMT cluster: "<<max_charge<<std::endl;
+  std::cout <<"Number of PMT hits in muon cluster: "<<n_hits<<std::endl;
 
   m_data->Stores["RecoEvent"]->Set("PMTClustersCharge",vec_pmtclusters_charge,false);
   m_data->Stores["RecoEvent"]->Set("PMTClustersTime",vec_pmtclusters_time,false);
@@ -690,7 +697,7 @@ bool EventSelector::EventSelectionByPMTMRDCoinc() {
     double time_diff = mrd_meantimes.at(i_mrd) - pmt_time;
     if (verbosity > 0) std::cout <<"MRD time: "<<mrd_meantimes.at(i_mrd)<<", PMT time: "<<pmt_time<<", difference: "<<time_diff<<std::endl;
     Log("EventSelector tool: MRD/Tank coincidene candidate "+std::to_string(i_mrd)+ " has time difference: "+std::to_string(time_diff),v_message,verbosity);
-    if (time_diff > pmtmrd_coinc_min && time_diff < pmtmrd_coinc_max){
+    if (time_diff > pmtmrd_coinc_min && time_diff < pmtmrd_coinc_max && max_charge > 200 && n_hits >= 20){
       coincidence = true;
     }
   }

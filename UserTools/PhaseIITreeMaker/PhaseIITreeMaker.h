@@ -20,6 +20,7 @@
 #include "RecoDigit.h"
 #include "ANNIEalgorithms.h"
 #include "TimeClass.h"
+#include "BeamStatus.h"
 
 class PhaseIITreeMaker: public Tool {
 
@@ -77,12 +78,17 @@ class PhaseIITreeMaker: public Tool {
   uint32_t fSubrunNumber;
   uint64_t fEventTimeTank;
   TimeClass* mrd_timestamp=nullptr;
-  uint64_t fEventTimeMRD;
+  TimeClass fEventTimeMRD;
   int fRunType;
   uint64_t fStartTime;
   int fNumEntries;
-  
-  
+  ULong64_t fEventTimeTank_Tree;
+  ULong64_t fEventTimeMRD_Tree;
+  ULong64_t fStartTime_Tree;
+  int fExtended;	//extended window variable, 0: no extended readout, 1: CC extended readout, 2: Non-CC extended readout
+  double fPot;
+  int fBeamok;	//1: beam is ok, 0: beam is not ok 
+
   // \brief Event Status flag masks
   int fEventStatusApplied;
   int fEventStatusFlagged;
@@ -125,7 +131,7 @@ class PhaseIITreeMaker: public Tool {
   // Cluster properties
   std::vector<double> mrddigittimesthisevent;
   std::vector<int> mrddigitpmtsthisevent;
-  std::vector<int> mrddigitchankeysthisevent;
+  std::vector<unsigned long> mrddigitchankeysthisevent;
   std::vector<std::vector<int>> MrdTimeClusters;
   
   // ************** Tank Cluster level information ********** //
@@ -163,7 +169,10 @@ class PhaseIITreeMaker: public Tool {
   std::vector<double> fMRDTrackStopX;
   std::vector<double> fMRDTrackStopY;
   std::vector<double> fMRDTrackStopZ;
-  
+  std::vector<bool> fMRDSide;
+  std::vector<bool> fMRDStop;
+  std::vector<bool> fMRDThrough;
+
   // Trigger-level information
   std::map<std::string,bool> fDataStreams;
   int fTriggerword;

@@ -82,6 +82,14 @@ bool LoadANNIEEvent::Execute() {
     m_data->Stores["ANNIEEvent"]->Initialise(input_filename);
     m_data->Stores["ANNIEEvent"]->Header->Get("TotalEntries",
       total_entries_in_file_);
+    if (current_file_==0) {
+      global_events.push_back(total_entries_in_file_);
+      global_events_start.push_back(0);
+    }
+    else {
+      global_events.push_back(global_events.at(current_file_-1)+total_entries_in_file_);
+      global_events_start.push_back(global_events.at(current_file_-1));
+    }
   }
 
    bool user_event=false;
@@ -90,7 +98,42 @@ bool LoadANNIEEvent::Execute() {
      m_data->CStore.Set("UserEvent",false);
      int user_evnum;
      m_data->CStore.Get("LoadEvNr",user_evnum);
-     if (user_evnum < total_entries_in_file_ && user_evnum >=0) current_entry_ = user_evnum;
+     if (!global_evnr){
+       if (user_evnum < total_entries_in_file_ && user_evnum >=0) current_entry_ = user_evnum;
+     } else {
+       if (user_evnum >= global_events_start.at(current_file_) && user_evnum < global_events.at(current_file_)){
+         current_entry_ = user_evnum-global_events_start.at(current_file_);
+         global_ev = user_evnum;
+       } else {
+         while (current_file_ < input_filenames_.size()){
+           ++current_file_;
+           if ( current_file_ >= input_filenames_.size() ) {
+             m_data->vars.Set("StopLoop", 1);
+           }
+           else {
+             current_entry_ = 0u;
+             if ( m_data->Stores.count("ANNIEEvent") ) {
+               auto* annie_event = m_data->Stores.at("ANNIEEvent");
+               if (annie_event) delete annie_event;
+               m_data->Stores["ANNIEEvent"] = new BoostStore(false,
+                 BOOST_STORE_MULTIEVENT_FORMAT);
+               std::string input_filename = input_filenames_.at(current_file_);
+               std::cout <<"Reading in current file "<<current_file_<<std::endl;
+               m_data->Stores["ANNIEEvent"]->Initialise(input_filename);
+               m_data->Stores["ANNIEEvent"]->Header->Get("TotalEntries",
+                 total_entries_in_file_);
+               global_events.push_back(global_events.at(current_file_-1)+total_entries_in_file_);
+               global_events_start.push_back(global_events.at(current_file_-1));
+               if (user_evnum >= global_events_start.at(current_file_) && user_evnum < global_events.at(current_file_)){
+                 current_entry_ = user_evnum-global_events_start.at(current_file_);
+                 global_ev = user_evnum;
+                 break;
+               }
+             }
+           }
+         }
+       }
+     }
    }
 
   Log("ANNIEEvent store has "+std::to_string(total_entries_in_file_)+" entries",v_debug,verbosity_);

@@ -53,4 +53,6 @@ class LoadANNIEEvent: public Tool {
     bool need_new_file_;
 
     std::stringstream logmessage;
+    std::vector<int> global_events, global_events_start;
+
 };

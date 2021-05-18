@@ -187,6 +187,7 @@ class EventSelector: public Tool {
   std::vector<double> *vec_pmtclusters_charge = nullptr;
   std::vector<double> *vec_pmtclusters_time = nullptr;
   std::vector<double> *vec_mrdclusters_time = nullptr;
+  std::map<int,double>* ChannelNumToTankPMTSPEChargeMap = nullptr;   ///< PMT SPE Gain Map
 
   //verbosity initialization
   int verbosity=1;

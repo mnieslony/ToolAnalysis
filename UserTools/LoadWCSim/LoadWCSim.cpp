@@ -715,7 +715,7 @@ bool LoadWCSim::Execute(){
 	if (mrd_lastlayer && mrd_firstlayer) Triggertype = "Cosmic";
 	m_data->Stores.at("ANNIEEvent")->Set("MRDTriggerType",Triggertype);
 	m_data->Stores.at("ANNIEEvent")->Set("PrimaryMuonIndex",primarymuonindex);
-	m_data->Stores.AT("ANNIEEvent")->Set("TriggerWord",TriggerWord);	
+	m_data->Stores.at("ANNIEEvent")->Set("TriggerWord",TriggerWord);	
 
 	//Things that need to be set by later tools:
 	//RawADCData

@@ -192,13 +192,13 @@ bool RunValidation::Execute(){
   //-------------------------------------------------------------------------
   //--------------------- Fill size of raw waveforms-------------------------
   //-------------------------------------------------------------------------
-
+/*
   std::map<unsigned long, std::vector<Waveform<unsigned short>>> raw_waveform_map;
   bool has_raw = m_data->Stores["ANNIEEvent"]->Get("RawADCData",raw_waveform_map);
   if (!has_raw) {
     Log("RunValidation tool: Did not find RawADCData in ANNIEEvent! Abort",v_error,verbosity);
     /*return false;*/
-  }
+/*  }
 
   if (has_raw){
     for (auto& temp_pair : raw_waveform_map) {
@@ -211,7 +211,7 @@ bool RunValidation::Execute(){
       }
     }
   }
-
+*/
   //-------------------------------------------------------------------------
   //----------------Fill cluster time histograms-----------------------------
   //-------------------------------------------------------------------------

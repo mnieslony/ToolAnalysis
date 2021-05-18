@@ -33,16 +33,16 @@ bool RunValidationStability::Execute(){
 
   TH1D *PMT_t_clusters_combined = new TH1D("PMT_t_clusters_combined","PMT cluster times (combined)",250,0,2000);
   TH1D *PMT_t_clusters_2pe_combined = new TH1D("PMT_t_clusters_2pe_combined","PMT cluster times (#geq 2.p.e, combined)",250,0,2000);
-  TH1D *PMT_t_clusters_cosmics_combined = new TH1D("PMT_t_clusters_combined","PMT cluster times (combined)",250,0,2000);
-  TH1D *PMT_t_clusters_2pe_cosmics_combined = new TH1D("PMT_t_clusters_2pe_combined","PMT cluster times (#geq 2.p.e, combined)",250,0,2000);
-  TH1D *PMT_t_clusters_led_combined = new TH1D("PMT_t_clusters_combined","PMT cluster times (combined)",250,0,2000);
-  TH1D *PMT_t_clusters_2pe_led_combined = new TH1D("PMT_t_clusters_2pe_combined","PMT cluster times (#geq 2.p.e, combined)",250,0,2000);
+  TH1D *PMT_t_clusters_cosmics_combined = new TH1D("PMT_t_clusters_cosmics_combined","PMT cluster times Cosmics (combined)",250,0,2000);
+  TH1D *PMT_t_clusters_2pe_cosmics_combined = new TH1D("PMT_t_clusters_2pe_cosmics_combined","PMT cluster times Cosmics (#geq 2.p.e, combined)",250,0,2000);
+  TH1D *PMT_t_clusters_led_combined = new TH1D("PMT_t_clusters_led_combined","PMT cluster times LED (combined)",250,0,2000);
+  TH1D *PMT_t_clusters_2pe_led_combined = new TH1D("PMT_t_clusters_2pe_led_combined","PMT cluster times LED (#geq 2.p.e, combined)",250,0,2000);
   TH1D *MRD_t_clusters_combined = new TH1D("MRD_t_clusters_combined","MRD cluster times (combined)",250,0,4000);
   TH1D *PMT_DelayedMult_combined = new TH1D("PMT_DelayedMult_combined","Neutron multiplicity (combined)",20,0,20);
   TH1D *PMT_DelayedMult_Coinc_combined = new TH1D("PMT_DelayedMult_Coinc_combined","Neutron multiplicity (PMT/MRD Coincidence, combined)",20,0,20);
   TH1D *PMT_DelayedMult_Coinc_NoFMV_CB_combined = new TH1D("PMT_DelayedMult_Coinc_NoFMV_CB_combined","Neutron multiplicity (PMT/MRD Coincidence, No FMV, CB < 0.4, combined)",20,0,20);
   TH1D *Triggerwords_combined = new TH1D("Triggerwords_combined","Triggerwords (combined)",60,0,60);  
-  TH1D *ADCWaveform_Samples_combined = new TH1D("ADCWaveform_Samples_combined","ADC Waveform Samples (combined)",5000,0,50000);
+  TH1D *ADCWaveform_Samples_combined = new TH1D("ADCWaveformSamples_combined","ADC Waveform Samples",5000,0,50000);
   TH1D *PMT_DelayedTime_combined = new TH1D("PMT_DelayedTime_combined","Neutron candidate time distribution (combined)",100,12000,67000);
   TH1D *PMT_DelayedTime_CB_combined = new TH1D("PMT_DelayedTime_CB_combined","Neutron candidate time distribution (CB < 0.4,combined)",100,12000,67000);
   TH1D *PMT_DelayedTime_Coinc_combined = new TH1D("PMT_DelayedTime_Coinc_combined","Neutron candidate time distribution (PMT/MRD Coinc, combined)",100,12000,67000);
@@ -352,6 +352,7 @@ bool RunValidationStability::Execute(){
   gr_avg_mult_coinc_nofmv_cb->SetMarkerSize(0.7);
 
   std::stringstream ss_title_pmt, ss_title_pmt_2pe, ss_title_pmt_cosmics, ss_title_pmt_2pe_cosmics, ss_title_pmt_led, ss_title_pmt_2pe_led, ss_title_mrd;
+  std::stringstream ss_title_mult, ss_title_mult_coinc, ss_title_mult_coinc_nofmv_cb, ss_title_trigword, ss_title_adc, ss_title_delayedt, ss_title_delayedt_coinc, ss_title_delayedt_coinc_nofmv, ss_title_delayedt_coinc_nofmv_cb, ss_title_delayedt_cb, ss_title_mult_coinc_nofmv;
   ss_title_pmt << "PMT Cluster times (Run "<<current_run - number_runs << "- Run "<<current_run<<")";
   ss_title_pmt_2pe << "PMT Cluster times (#geq 2p.e.,Run "<<current_run - number_runs << "- Run "<<current_run<<")";
   ss_title_pmt_cosmics << "PMT Cluster times Cosmics (Run "<<current_run - number_runs << "- Run "<<current_run<<")";
@@ -359,23 +360,33 @@ bool RunValidationStability::Execute(){
   ss_title_pmt_led << "PMT Cluster times LED (Run "<<current_run - number_runs << "- Run "<<current_run<<")";
   ss_title_pmt_2pe_led << "PMT Cluster times LED (#geq 2p.e., Run "<<current_run - number_runs << "- Run "<<current_run<<")";
   ss_title_mrd << "MRD Cluster times (Run "<<current_run - number_runs << "- Run "<<current_run<<")";
+  ss_title_mult << "Neutron multiplicity (Run "<<current_run - number_runs << "- Run "<<current_run<<")";
+  ss_title_mult_coinc << "Neutron multiplicity PMT/MRD Coincidence (Run "<<current_run - number_runs << "- Run "<<current_run<<")";
+  ss_title_mult_coinc_nofmv << "Neutron multiplicity PMT/MRD Coincidence, No FMV, CB < 0.4 (Run "<<current_run - number_runs << "- Run "<<current_run << ")";
+  ss_title_trigword << "Triggerwords (Run "<<current_run - number_runs << "- Run "<<current_run <<")";
+  ss_title_adc << "ADC Waveform Samples (Run "<<current_run - number_runs <<"- Run "<<current_run <<")";
+  ss_title_delayedt << "Neutron candidate time distribution (Run "<<current_run - number_runs << "- Run "<<current_run <<")";
+  ss_title_delayedt_cb << "Neutron candidate time distribution CB < 0.4 (Run "<<current_run - number_runs << "- Run "<<current_run <<")";
+  ss_title_delayedt_coinc << "Neutron candidate time distribution PMT/MRD Coincidence (Run "<<current_run - number_runs << "- Run "<<current_run <<")";
+  ss_title_delayedt_coinc_nofmv << "Neutron candidate time distribution PMT/MRD Coinc, No FMV (Run "<<current_run - number_runs << "- Run "<<current_run <<")";
+  ss_title_delayedt_coinc_nofmv_cb << "Neutron candidate time distribution PMT/MRD Coinc, No FMV, CB < 0.4 (Run "<<current_run - number_runs << "- Run "<<current_run <<")";
   PMT_t_clusters_combined->SetTitle(ss_title_pmt.str().c_str());
-  PMT_t_clusters_2pe_combined->Write();
-  PMT_t_clusters_cosmics_combined->Write();
-  PMT_t_clusters_2pe_cosmics_combined->Write();
-  PMT_t_clusters_led_combined->Write();
-  PMT_t_clusters_2pe_led_combined->Write();
-  MRD_t_clusters_combined->Write();
-  PMT_DelayedMult_combined->Write();
-  PMT_DelayedMult_Coinc_combined->Write();
-  PMT_DelayedMult_Coinc_NoFMV_CB_combined->Write();
-  Triggerwords_combined->Write();
+  PMT_t_clusters_2pe_combined->SetTitle(ss_title_pmt_2pe.str().c_str());
+  PMT_t_clusters_cosmics_combined->SetTitle(ss_title_pmt_cosmics.str().c_str());
+  PMT_t_clusters_2pe_cosmics_combined->SetTitle(ss_title_pmt_2pe_cosmics.str().c_str());
+  PMT_t_clusters_led_combined->SetTitle(ss_title_pmt_led.str().c_str());
+  PMT_t_clusters_2pe_led_combined->SetTitle(ss_title_pmt_2pe_led.str().c_str());
+  MRD_t_clusters_combined->SetTitle(ss_title_mrd.str().c_str());
+  PMT_DelayedMult_combined->SetTitle(ss_title_mult.str().c_str());
+  PMT_DelayedMult_Coinc_combined->SetTitle(ss_title_mult_coinc.str().c_str());
+  PMT_DelayedMult_Coinc_NoFMV_CB_combined->SetTitle(ss_title_mult_coinc_nofmv_cb.str().c_str());
+  Triggerwords_combined->SetTitle(ss_title_trigword.str().c_str());
   ADCWaveform_Samples_combined->Write();
-  PMT_DelayedTime_combined->Write();
-  PMT_DelayedTime_CB_combined->Write();
-  PMT_DelayedTime_Coinc_combined->Write();
-  PMT_DelayedTime_Coinc_NoFMV_combined->Write();
-  PMT_DelayedTime_Coinc_NoFMV_CB_combined->Write();
+  PMT_DelayedTime_combined->SetTitle(ss_title_delayedt.str().c_str());
+  PMT_DelayedTime_CB_combined->SetTitle(ss_title_delayedt_cb.str().c_str());
+  PMT_DelayedTime_Coinc_combined->SetTitle(ss_title_delayedt_coinc.str().c_str());
+  PMT_DelayedTime_Coinc_NoFMV_combined->SetTitle(ss_title_delayedt_coinc_nofmv.str().c_str());
+  PMT_DelayedTime_Coinc_NoFMV_CB_combined->SetTitle(ss_title_delayedt_coinc_nofmv_cb.str().c_str());
   
   for (int i_run=0; i_run < (int) run_numbers.size(); i_run++){
 

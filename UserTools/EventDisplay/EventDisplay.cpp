@@ -649,8 +649,10 @@ bool EventDisplay::Execute(){
   logmessage = "EventDisplay tool: Event number "+std::to_string(evnum);
   Log(logmessage,v_message,verbose);
 
-  if (single_event>=0 && i_loop ==2) return true;
-  else i_loop = 2;
+  if (single_event>=0){
+    if (i_loop ==2) return true;
+    else i_loop = 2;
+  }  
   passed_selection_cuts = EventCutStatus;
   if (selected_event && !passed_selection_cuts) return true;
   Log("EventDisplay tool: Event number check passed.",v_debug,verbose);

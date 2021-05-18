@@ -165,8 +165,8 @@ bool ClusterFinder::Execute(){
   //----------------------------------------------------------------------------
   
   m_data->Stores["ANNIEEvent"]->Get("EventNumber", evnum);
-  m_data->Stores["ANNIEEvent"]->Get("BeamStatus", BeamStatus);
-  bool got_recoadc = m_data->Stores["ANNIEEvent"]->Get("RecoADCHits",RecoADCHits);
+  //m_data->Stores["ANNIEEvent"]->Get("BeamStatus", BeamStatus);
+  bool got_recoadc = m_data->Stores["ANNIEEvent"]->Get("RecoADCData",RecoADCHits);
 
   if (HitStoreName == "MCHits"){
     bool got_mchits = m_data->Stores["ANNIEEvent"]->Get("MCHits", MCHits);
