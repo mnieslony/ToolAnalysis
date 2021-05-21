@@ -13,6 +13,7 @@ bool PhaseIITreeMaker::Initialise(std::string configfile, DataModel &data){
   /////////////////////////////////////////////////////////////////
   
   m_variables.Get("verbose", verbosity);
+  m_variables.Get("IsData",isData);
   m_variables.Get("TankHitInfo_fill", TankHitInfo_fill);
   m_variables.Get("MRDHitInfo_fill", MRDHitInfo_fill);
   m_variables.Get("fillCleanEventsOnly", fillCleanEventsOnly);
@@ -36,6 +37,11 @@ bool PhaseIITreeMaker::Initialise(std::string configfile, DataModel &data){
 
   m_data->CStore.Get("AuxChannelNumToTypeMap",AuxChannelNumToTypeMap);
   m_data->CStore.Get("ChannelNumToTankPMTSPEChargeMap",ChannelKeyToSPEMap);
+  m_data->CStore.Get("pmt_tubeid_to_channelkey_data",pmtid_to_channelkey);
+  m_data->CStore.Get("channelkey_to_pmtid",channelkey_to_pmtid);
+  m_data->CStore.Get("channelkey_to_mrdpmtid",channelkey_to_mrdpmtid);
+  m_data->CStore.Get("mrdpmtid_to_channelkey_data",mrdpmtid_to_channelkey_data);
+  m_data->CStore.Get("channelkey_to_faccpmtid",channelkey_to_faccpmtid);
 
   auto get_geometry= m_data->Stores.at("ANNIEEvent")->Header->Get("AnnieGeometry",geom);
   if(!get_geometry){
@@ -81,6 +87,7 @@ bool PhaseIITreeMaker::Initialise(std::string configfile, DataModel &data){
       fPhaseIITankClusterTree->Branch("hitType", &fHitType);
       fPhaseIITankClusterTree->Branch("hitDetID", &fHitDetID);
       fPhaseIITankClusterTree->Branch("hitChankey",&fHitChankey);
+      fPhaseIITankClusterTree->Branch("hitChankeyMC",&fHitChankeyMC);
     }
     //SiPM Pulse Info; load into both trees for now...
     if(SiPMPulseInfo_fill){
@@ -119,9 +126,11 @@ bool PhaseIITreeMaker::Initialise(std::string configfile, DataModel &data){
       fPhaseIIMRDClusterTree->Branch("MRDhitT",&fMRDHitT);
       fPhaseIIMRDClusterTree->Branch("MRDhitDetID", &fMRDHitDetID);
       fPhaseIIMRDClusterTree->Branch("MRDhitChankey", &fMRDHitChankey);
+      fPhaseIIMRDClusterTree->Branch("MRDhitChankeyMC", &fMRDHitChankeyMC);
       fPhaseIIMRDClusterTree->Branch("FMVhitT",&fFMVHitT);
       fPhaseIIMRDClusterTree->Branch("FMVhitDetID",&fFMVHitDetID);
       fPhaseIIMRDClusterTree->Branch("FMVhitChankey",&fFMVHitChankey);
+      fPhaseIIMRDClusterTree->Branch("FMVhitChankeyMC",&fFMVHitChankeyMC);
       fPhaseIIMRDClusterTree->Branch("vetoHit",&fVetoHit,"vetoHit/I");
     }
     if(MRDReco_fill){
@@ -198,15 +207,19 @@ bool PhaseIITreeMaker::Initialise(std::string configfile, DataModel &data){
       fPhaseIITrigTree->Branch("hitPE",&fHitPE);
       fPhaseIITrigTree->Branch("hitType", &fHitType);
       fPhaseIITrigTree->Branch("hitDetID", &fHitDetID);
+      fPhaseIITrigTree->Branch("hitChankey", &fHitChankey);
+      fPhaseIITrigTree->Branch("hitChankeyMC",&fHitChankeyMC);
     }
 
     if(MRDHitInfo_fill){
       fPhaseIITrigTree->Branch("MRDhitT",&fMRDHitT);
       fPhaseIITrigTree->Branch("MRDhitDetID", &fMRDHitDetID);
       fPhaseIITrigTree->Branch("MRDhitChankey", &fMRDHitChankey);
+      fPhaseIITrigTree->Branch("MRDhitChankeyMC", &fMRDHitChankeyMC);
       fPhaseIITrigTree->Branch("FMVhitT",&fFMVHitT);
       fPhaseIITrigTree->Branch("FMVhitDetID",&fFMVHitDetID);
       fPhaseIITrigTree->Branch("FMVhitChankey",&fFMVHitChankey);
+      fPhaseIITrigTree->Branch("FMVhitChankeyMC",&fFMVHitChankeyMC);
       fPhaseIITrigTree->Branch("vetoHit",&fVetoHit,"vetoHit/I");
     }
     if(MRDReco_fill){
@@ -248,7 +261,7 @@ bool PhaseIITreeMaker::Initialise(std::string configfile, DataModel &data){
     //MC truth information for muons
     //Output to tree when MCTruth_fill = 1 in config
     if (MCTruth_fill){
-      fPhaseIITrigTree->Branch("triggerNumber",&fMCTriggerNum,"triggerNumber/I");
+      fPhaseIITrigTree->Branch("triggerNumber",&fiMCTriggerNum,"triggerNumber/I");
       fPhaseIITrigTree->Branch("mcEntryNumber",&fMCEventNum,"mcEntryNumber/I");
       fPhaseIITrigTree->Branch("trueVtxX",&fTrueVtxX,"trueVtxX/D");
       fPhaseIITrigTree->Branch("trueVtxY",&fTrueVtxY,"trueVtxY/D");
@@ -259,7 +272,8 @@ bool PhaseIITreeMaker::Initialise(std::string configfile, DataModel &data){
       fPhaseIITrigTree->Branch("trueDirZ",&fTrueDirZ,"trueDirZ/D");
       fPhaseIITrigTree->Branch("trueAngle",&fTrueAngle,"trueAngle/D");
       fPhaseIITrigTree->Branch("truePhi",&fTruePhi,"truePhi/D");
-      fPhaseIITrigTree->Branch("trueMuonEnergy",&fTrueMuonEnergy, "trueMuonEnergy/D");
+      fPhaseIITrigTree->Branch("trueMuonEnergy",&fTrueMuonEnergy,"trueMuonEnergy/D");
+      fPhaseIITrigTree->Branch("truePrimaryPdg",&fTruePrimaryPdg,"truPrimaryPdg/I");
       fPhaseIITrigTree->Branch("trueTrackLengthInWater",&fTrueTrackLengthInWater,"trueTrackLengthInWater/D");
       fPhaseIITrigTree->Branch("trueTrackLengthInMRD",&fTrueTrackLengthInMRD,"trueTrackLengthInMRD/D");
       fPhaseIITrigTree->Branch("Pi0Count",&fPi0Count,"Pi0Count/I");
@@ -351,21 +365,40 @@ bool PhaseIITreeMaker::Execute(){
   if(TankClusterProcessing){
     Log("PhaseIITreeMaker Tool: Beginning Tank cluster processing",v_debug,verbosity);
     //bool get_clusters = m_data->Stores.at("ANNIEEvent")->Get("ClusterMap",m_all_clusters);
-    bool get_clusters = m_data->CStore.Get("ClusterMap",m_all_clusters);
-    if(!get_clusters){
-      std::cout << "PhaseIITreeMaker tool: No clusters found!" << std::endl;
-      return false;
+    bool get_clusters = false;
+    if (isData){
+      get_clusters = m_data->CStore.Get("ClusterMap",m_all_clusters);
+      if(!get_clusters){
+        std::cout << "PhaseIITreeMaker tool: No clusters found!" << std::endl;
+        return false;
+      }
+    } else {
+      get_clusters = m_data->CStore.Get("ClusterMapMC",m_all_clusters_MC);
+      if (!get_clusters){
+        std::cout <<"PhaseIITreeMaker tool: No clusters found (MC)!" << std::endl;
+        return false;
+      }
     }
-    Log("PhaseIITreeMaker Tool: Accessing pairs in all_clusters map",v_debug,verbosity);
     get_clusters = m_data->CStore.Get("ClusterMapDetkey",m_all_clusters_detkeys);
     if (!get_clusters){
       std::cout <<"PhaseIITreeMaker tool: No cluster detkeys found!" << std::endl;
       return false;
     }
+    Log("PhaseIITreeMaker Tool: Accessing pairs in all_clusters map",v_debug,verbosity);
 
     int cluster_num = 0;
-    std::cout <<"PMT cluster size: "<<m_all_clusters->size()<<std::endl;
-    for (std::pair<double,std::vector<Hit>>&& cluster_pair : *m_all_clusters) {
+    int cluster_size = 0;
+    if (isData) cluster_size = (int) m_all_clusters->size();
+    else cluster_size = (int) m_all_clusters_MC->size();
+      
+    std::map<double,std::vector<Hit>>::iterator it_cluster_pair;
+    std::map<double,std::vector<MCHit>>::iterator it_cluster_pair_mc;
+    bool loop_map = true;
+    if (isData) it_cluster_pair = (*m_all_clusters).begin();
+    else it_cluster_pair_mc = (*m_all_clusters_MC).begin();
+    if (cluster_size == 0) loop_map = false;
+    while (loop_map){
+    //for (std::pair<double,std::vector<Hit>>&& cluster_pair : *m_all_clusters) {
       Log("PhaseIITreeMaker Tool: Resetting variables prior to getting run level info",v_debug,verbosity);
       this->ResetVariables();
       fClusterNumber = cluster_num;
@@ -427,7 +460,7 @@ bool PhaseIITreeMaker::Execute(){
         has_raw = m_data->Stores["ANNIEEvent"]->Get("RawAcqSize",raw_acqsize_map);
         if (!has_raw) {
           Log("RunValidation tool: Did not find RawAcqSize in ANNIEEvent! Abort",v_error,verbosity);
-          return false;
+          if (isData) return false;
         }
         int size_of_window = 2000;
         if (has_raw){
@@ -442,23 +475,43 @@ bool PhaseIITreeMaker::Execute(){
           }
         }
       }
+      if (isData){
+        std::vector<Hit> cluster_hits = it_cluster_pair->second;
+        fClusterTime = it_cluster_pair->first;
+        if(TankHitInfo_fill){
+          Log("PhaseIITreeMaker Tool: Loading tank cluster hits into cluster tree",v_debug,verbosity);
+          this->LoadTankClusterHits(cluster_hits);
+        }
 
-      std::vector<Hit> cluster_hits = cluster_pair.second;
-      fClusterTime = cluster_pair.first;
-      if(TankHitInfo_fill){
-        Log("PhaseIITreeMaker Tool: Loading tank cluster hits into cluster tree",v_debug,verbosity);
-        this->LoadTankClusterHits(cluster_hits);
+        bool good_class = this->LoadTankClusterClassifiers(it_cluster_pair->first);
+        if(!good_class){
+          if(verbosity>3) Log("PhaseIITreeMaker Tool: No cluster classifiers.  Continuing tree",v_debug,verbosity);
+        }
+      } else {
+        std::vector<MCHit> cluster_hits = it_cluster_pair_mc->second;
+        fClusterTime = it_cluster_pair_mc->first;
+        std::vector<unsigned long> cluster_detkeys = m_all_clusters_detkeys->at(it_cluster_pair_mc->first);
+        if(TankHitInfo_fill){
+          Log("PhaseIITreeMaker Tool: Loading tank cluster hits into cluster tree",v_debug,verbosity);
+          this->LoadTankClusterHitsMC(cluster_hits,cluster_detkeys);
+        }
+        bool good_class = this->LoadTankClusterClassifiers(it_cluster_pair_mc->first);
+        if(!good_class){
+          if(verbosity>3) Log("PhaseIITreeMaker Tool: No cluster classifiers.  Continuing tree",v_debug,verbosity);
+        }
       }
 
-      bool good_class = this->LoadTankClusterClassifiers(cluster_pair.first);
-      if(!good_class){
-        if(verbosity>3) Log("PhaseIITreeMaker Tool: No cluster classifiers.  Continuing tree",v_debug,verbosity);
-      }
       if(SiPMPulseInfo_fill) this->LoadSiPMHits();
       fPhaseIITankClusterTree->Fill();
       cluster_num += 1;
+      if (isData){
+        it_cluster_pair++;
+        if (it_cluster_pair == (*m_all_clusters).end()) loop_map = false;
+      } else {
+        it_cluster_pair_mc++;
+        if (it_cluster_pair_mc == (*m_all_clusters_MC).end()) loop_map = false;
+      } 
     }
-
   }
 
   if(MRDClusterProcessing){
@@ -473,7 +526,6 @@ bool PhaseIITreeMaker::Execute(){
     int num_mrd_clusters;
     m_data->CStore.Get("NumMrdTimeClusters",num_mrd_clusters);
 
-
     if (num_mrd_clusters > 0){
       m_data->CStore.Get("MrdDigitTimes",mrddigittimesthisevent);
       m_data->CStore.Get("MrdDigitPmts",mrddigitpmtsthisevent);
@@ -483,15 +535,18 @@ bool PhaseIITreeMaker::Execute(){
 
     //Check if there's a veto hit in the acquisition
     int TrigHasVetoHit = 0;
-    bool has_tdc = m_data->Stores["ANNIEEvent"]->Get("TDCData",TDCData);  // a std::map<ChannelKey,vector<TDCHit>>
-    if (!has_tdc){
-      std::cout << "No TDCData store in ANNIEEvent." << std::endl;
-      //return false;
-    }
+    bool has_tdc = false;
+    if (isData) has_tdc = m_data->Stores["ANNIEEvent"]->Get("TDCData",TDCData);  // a std::map<ChannelKey,vector<TDCHit>>
+    else has_tdc = m_data->Stores["ANNIEEvent"]->Get("TDCData",TDCData_MC);     
+ if (!has_tdc){
+        std::cout << "No TDCData store in ANNIEEvent." << std::endl;
+        //return false;
+     }
     
     int cluster_num = 0;
-    for (int i=0; i<MrdTimeClusters.size(); i++){
+    for (int i=0; i<(int)MrdTimeClusters.size(); i++){
       Log("PhaseIITreeMaker Tool: Resetting variables prior to getting MRD cluster info",v_debug,verbosity);
+      int tdcdata_size = (isData)? TDCData->size() : TDCData_MC->size();
       this->ResetVariables();
       uint32_t trigword_temp;
       m_data->Stores.at("ANNIEEvent")->Get("TriggerWord",trigword_temp);
@@ -512,19 +567,40 @@ bool PhaseIITreeMaker::Execute(){
       else fNoVeto = 0;
       fMRDClusterHits = 0;
       if (has_tdc){
-        if(TDCData->size()>0){
+        if(tdcdata_size>0){
           Log("PhaseIITreeMaker tool: Looping over FACC/MRD hits... looking for Veto activity",v_debug,verbosity);
-          for(auto&& anmrdpmt : (*TDCData)){
-            unsigned long chankey = anmrdpmt.first;
-            std::vector<Hit> mrdhits = anmrdpmt.second;
-            Detector* thedetector = geom->ChannelToDetector(chankey);
-            unsigned long detkey = thedetector->GetDetectorID();
-            if(thedetector->GetDetectorElement()=="Veto") {
-              TrigHasVetoHit=1; // this is a veto hit, not an MRD hit.
-              for (int j = 0; j < (int) mrdhits.size(); j++){
-                fFMVHitT.push_back(mrdhits.at(j).GetTime());
-                fFMVHitDetID.push_back(detkey);
-                fFMVHitChankey.push_back(chankey);
+          if (isData){
+            for(auto&& anmrdpmt : (*TDCData)){
+              unsigned long chankey = anmrdpmt.first;
+              std::vector<Hit> mrdhits = anmrdpmt.second;
+              Detector* thedetector = geom->ChannelToDetector(chankey);
+              unsigned long detkey = thedetector->GetDetectorID();
+              if(thedetector->GetDetectorElement()=="Veto") {
+                TrigHasVetoHit=1; // this is a veto hit, not an MRD hit.
+                for (int j = 0; j < (int) mrdhits.size(); j++){
+                  fFMVHitT.push_back(mrdhits.at(j).GetTime());
+                  fFMVHitDetID.push_back(detkey);
+                  fFMVHitChankey.push_back(chankey);
+                  fFMVHitChankeyMC.push_back(chankey);
+                }
+              }
+            }
+          } else {  
+            for(auto&& anmrdpmt : (*TDCData_MC)){
+              unsigned long chankey = anmrdpmt.first;
+              Detector* thedetector = geom->ChannelToDetector(chankey);
+              unsigned long detkey = thedetector->GetDetectorID();
+              if(thedetector->GetDetectorElement()=="Veto") {
+                TrigHasVetoHit=1; // this is a veto hit, not an MRD hit.
+                int wcsimid = channelkey_to_faccpmtid.at(chankey)-1;
+                unsigned long chankey_data = wcsimid;
+                std::vector<MCHit> mrdhits = anmrdpmt.second;
+                for (int j = 0; j < (int) mrdhits.size(); j++){
+                  fFMVHitT.push_back(mrdhits.at(j).GetTime());
+                  fFMVHitDetID.push_back(detkey);
+                  fFMVHitChankey.push_back(chankey_data);  
+                  fFMVHitChankeyMC.push_back(chankey);
+                }
               }
             }
           }
@@ -532,13 +608,18 @@ bool PhaseIITreeMaker::Execute(){
       }
       fVetoHit = TrigHasVetoHit;
       std::vector<int> ThisClusterIndices = MrdTimeClusters.at(i);
-      std::cout <<"Loop through cluster indices"<<std::endl;
       for (int j=0; j < (int) ThisClusterIndices.size(); j++){
         Detector *thedetector = geom->ChannelToDetector(mrddigitchankeysthisevent.at(ThisClusterIndices.at(j)));
         unsigned long detkey = thedetector->GetDetectorID();
         fMRDHitT.push_back(mrddigittimesthisevent.at(ThisClusterIndices.at(j)));
         fMRDHitDetID.push_back(detkey);
-        fMRDHitChankey.push_back(mrddigitchankeysthisevent.at(ThisClusterIndices.at(j)));
+        if (isData) fMRDHitChankey.push_back(mrddigitchankeysthisevent.at(ThisClusterIndices.at(j)));
+        else {
+          int wcsimid = channelkey_to_mrdpmtid.at(mrddigitchankeysthisevent.at(ThisClusterIndices.at(j)))-1;
+          unsigned long chankey_data = mrdpmtid_to_channelkey_data[wcsimid];
+          fMRDHitChankey.push_back(chankey_data);
+        }
+        fMRDHitChankeyMC.push_back(mrddigitchankeysthisevent.at(ThisClusterIndices.at(j)));
         fMRDClusterHits+=1;
       }
 
@@ -556,9 +637,7 @@ bool PhaseIITreeMaker::Execute(){
       m_data->Stores.at("ANNIEEvent")->Get("EventNumber",fEventNumber);
       m_data->Stores.at("ANNIEEvent")->Get("EventTimeTank",fEventTimeTank);
       fEventTimeTank_Tree = (ULong64_t) fEventTimeTank;
-      std::cout <<"MRD EventTimeTank: "<<fEventTimeTank<<std::endl;
       m_data->Stores.at("ANNIEEvent")->Get("EventTimeMRD",fEventTimeMRD);  
-      std::cout <<"MRD EventTimeMRD: "<<fEventTimeMRD.GetNs()<<std::endl;
       fEventTimeMRD_Tree = (ULong64_t) fEventTimeMRD.GetNs();
 
       // ANNIE Event number
@@ -622,11 +701,11 @@ bool PhaseIITreeMaker::Execute(){
 
     // Read hits and load into ntuple
     if(TankHitInfo_fill){
-      this->LoadAllTankHits();
+      this->LoadAllTankHits(isData);
     }
     if(SiPMPulseInfo_fill) this->LoadSiPMHits();
-
-    if(MRDHitInfo_fill) this->LoadAllMRDHits();
+ 
+    if(MRDHitInfo_fill) this->LoadAllMRDHits(isData);
 
     if(MRDReco_fill){
       fNumClusterTracks=0;
@@ -781,9 +860,11 @@ void PhaseIITreeMaker::ResetVariables() {
     fMRDHitT.clear();
     fMRDHitDetID.clear();
     fMRDHitChankey.clear();
+    fMRDHitChankeyMC.clear();
     fFMVHitT.clear();
     fFMVHitDetID.clear();
     fFMVHitChankey.clear();
+    fFMVHitChankeyMC.clear();
   }
   if(MRDReco_fill){
     fMRDTrackAngle.clear();
@@ -815,6 +896,7 @@ void PhaseIITreeMaker::ResetVariables() {
     fHitType.clear();
     fHitDetID.clear();
     fHitChankey.clear();
+    fHitChankeyMC.clear();
   }
   
   if (muonTruthRecoDiff_fill){ 
@@ -867,6 +949,7 @@ void PhaseIITreeMaker::LoadTankClusterHits(std::vector<Hit> cluster_hits){
     std::map<int, double>::iterator it = ChannelKeyToSPEMap.find(channel_key);
     if(it != ChannelKeyToSPEMap.end()){ //Charge to SPE conversion is available
       Detector* this_detector = geom->ChannelToDetector(channel_key);
+      unsigned long detkey = this_detector->GetDetectorID();
       Position det_position = this_detector->GetDetectorPosition();
       double hit_charge = cluster_hits.at(i).GetCharge();
       double hit_PE = hit_charge / ChannelKeyToSPEMap.at(channel_key);
@@ -876,7 +959,7 @@ void PhaseIITreeMaker::LoadTankClusterHits(std::vector<Hit> cluster_hits){
       fHitQ.push_back(hit_charge);
       fHitPE.push_back(hit_PE);
       fHitT.push_back(cluster_hits.at(i).GetTime());
-      fHitDetID.push_back(channel_key);
+      fHitDetID.push_back(detkey);
       fHitChankey.push_back(channel_key);
       fHitType.push_back(RecoDigit::PMT8inch);
       fClusterCharge+=hit_charge;
@@ -892,6 +975,55 @@ void PhaseIITreeMaker::LoadTankClusterHits(std::vector<Hit> cluster_hits){
   return;
 }
 
+void PhaseIITreeMaker::LoadTankClusterHitsMC(std::vector<MCHit> cluster_hits, std::vector<unsigned long> cluster_detkeys){
+   Position detector_center=geom->GetTankCentre();
+   double tank_center_x = detector_center.X();
+   double tank_center_y = detector_center.Y();
+   double tank_center_z = detector_center.Z();
+
+   fClusterCharge = 0;
+   fClusterPE = 0;
+   fClusterHits = 0;
+   for (int i = 0; i < (int) cluster_hits.size(); i++){
+     unsigned long detkey = cluster_detkeys.at(i);
+     int channel_key = (int) detkey; 
+     int tubeid = cluster_hits.at(i).GetTubeId();
+     unsigned long utubeid = (unsigned long) tubeid;
+     int wcsimid = channelkey_to_pmtid.at(utubeid);
+     unsigned long detkey_data = pmtid_to_channelkey[wcsimid];
+     int channel_key_data = (int) detkey_data;
+     std::map<int, double>::iterator it = ChannelKeyToSPEMap.find(channel_key_data);
+     if(it != ChannelKeyToSPEMap.end()){ //Charge to SPE conversion is available
+       Detector* this_detector = geom->ChannelToDetector(tubeid);
+       Position det_position = this_detector->GetDetectorPosition();
+       unsigned long detkey = this_detector->GetDetectorID();
+       double hit_PE = cluster_hits.at(i).GetCharge();
+       double hit_charge = hit_PE * ChannelKeyToSPEMap.at(channel_key_data);
+       fHitX.push_back((det_position.X()-tank_center_x));
+       fHitY.push_back((det_position.Y()-tank_center_y));
+       fHitZ.push_back((det_position.Z()-tank_center_z));
+       fHitQ.push_back(hit_charge);
+       fHitPE.push_back(hit_PE);
+       fHitT.push_back(cluster_hits.at(i).GetTime());
+       //if (cluster_hits.at(i).GetTime()>2000.) std::cout <<"found cluster hit >  2us! Time: "<<cluster_hits.at(i).GetTime()<<std::endl;
+       //fHitDetID.push_back(tubeid);
+       //fHitChankey.push_back(channel_key_data);
+       fHitDetID.push_back(detkey);
+       fHitChankey.push_back(channel_key_data);
+       fHitChankeyMC.push_back(channel_key);
+       fHitType.push_back(RecoDigit::PMT8inch);
+       fClusterCharge+=hit_charge;
+       fClusterPE+=hit_PE;
+       fClusterHits += 1;
+     } else {
+       if(verbosity>4){
+         std::cout << "FOUND A HIT FOR CHANNELKEY " << channel_key_data << "(MC detkey: "<<channel_key<<", chankey = "<<utubeid<<", wcsimid = "<<wcsimid<<") BUT NO CONVERSION " <<
+             "TO PE AVAILABLE.  SKIPPING PE." << std::endl;
+       }
+     }
+   }
+   return;
+ }
 
 void PhaseIITreeMaker::LoadSiPMHits() {
   std::map<unsigned long, std::vector< std::vector<ADCPulse>> > aux_pulse_map;
@@ -925,42 +1057,81 @@ void PhaseIITreeMaker::LoadSiPMHits() {
   }
 }
 
-void PhaseIITreeMaker::LoadAllMRDHits(){
-  //bool get_clusters = m_data->CStore.Get("MrdTimeClusters",MrdTimeClusters);
-  //if(!get_clusters){
-  //  std::cout << "BeamClusterAnalysis tool: No MRD clusters found! Did you run the TimeClustering tool?" << std::endl;
-  //  return;
-  //}
-  
-  //m_data->CStore.Get("MrdDigitTimes",mrddigittimesthisevent);
-  //m_data->CStore.Get("MrdDigitPmts",mrddigitpmtsthisevent);
+void PhaseIITreeMaker::LoadAllMRDHits(bool IsData){
 
-  fVetoHit = 0; 
-  bool get_ok = m_data->Stores["ANNIEEvent"]->Get("TDCData",TDCData);  // a std::map<ChannelKey,vector<TDCHit>>
+  fVetoHit = 0;
+  bool get_ok = false;
+  if (IsData) get_ok = m_data->Stores["ANNIEEvent"]->Get("TDCData",TDCData);  // a std::map<ChannelKey,vector<TDCHit>>
+  else get_ok = m_data->Stores["ANNIEEvent"]->Get("TDCData",TDCData_MC);
   if (!get_ok){
     std::cout << "PhaseIITreeMaker tool: No TDCData store in ANNIEEvent." << std::endl;
     return;
   }
-  if(TDCData->size()>0){
+  int tdcdata_size = (IsData)? TDCData->size() : TDCData_MC->size();
+  if(tdcdata_size>0){
     Log("PhaseIITreeMaker tool: Looping over FACC/MRD hits... looking for Veto activity",v_debug,verbosity);
-    for(auto&& anmrdpmt : (*TDCData)){
-      unsigned long chankey = anmrdpmt.first;
+    std::map<unsigned long,std::vector<Hit>>::iterator it_mrd_data;
+    std::map<unsigned long,std::vector<MCHit>>::iterator it_mrd_mc;
+    if (IsData) it_mrd_data = (*TDCData).begin();
+    else it_mrd_mc = (*TDCData_MC).begin();
+    bool loop_mrd = true;
+    while (loop_mrd){
+    //for(auto&& anmrdpmt : (*TDCData)){
+      unsigned long chankey = 0;
+      if (IsData) chankey = it_mrd_data->first;
+      else chankey = it_mrd_mc->first;
       Detector* thedetector = geom->ChannelToDetector(chankey);
       unsigned long detkey = thedetector->GetDetectorID();
-      std::vector<Hit> mrdhits = anmrdpmt.second;
+      std::vector<Hit> mrdhits;
+      std::vector<MCHit> mrdhits_mc;
+      if (IsData) mrdhits = it_mrd_data->second;
+      else mrdhits_mc = it_mrd_mc->second;
       if(thedetector->GetDetectorElement()=="Veto") {
         fVetoHit=1; // this is a veto hit, not an MRD hit.
-        for (int j = 0; j < (int) mrdhits.size(); j++){
-          fFMVHitT.push_back(mrdhits.at(j).GetTime());
-          fFMVHitDetID.push_back(detkey);
-          fFMVHitChankey.push_back(chankey);
+        if (IsData){
+          for (int j = 0; j < (int) mrdhits.size(); j++){
+            fFMVHitT.push_back(mrdhits.at(j).GetTime());
+            fFMVHitDetID.push_back(detkey);
+            fFMVHitChankey.push_back(chankey);
+            fFMVHitChankeyMC.push_back(chankey);
+          }
+        } else {
+          int wcsimid = channelkey_to_faccpmtid.at(chankey)-1;
+          std::cout <<"wcsimid: "<<wcsimid<<std::endl;
+          unsigned long chankey_data = wcsimid;
+          std::cout <<"chankey_data: "<<chankey_data<<std::endl;
+          for (int j = 0; j < (int) mrdhits_mc.size(); j++){
+            fFMVHitT.push_back(mrdhits_mc.at(j).GetTime());
+            fFMVHitDetID.push_back(detkey);
+            fFMVHitChankey.push_back(chankey_data);
+            fFMVHitChankeyMC.push_back(chankey);
+          }
         }
       } else {
-        for(int j = 0; j<mrdhits.size(); j++){
-          fMRDHitT.push_back(mrdhits.at(j).GetTime());
-          fMRDHitDetID.push_back(detkey);
-          fMRDHitChankey.push_back(chankey);
+        if (IsData){
+          for(int j = 0; j < (int) mrdhits.size(); j++){
+            fMRDHitT.push_back(mrdhits.at(j).GetTime());
+            fMRDHitDetID.push_back(detkey);
+            fMRDHitChankey.push_back(chankey);
+            fMRDHitChankeyMC.push_back(chankey);
+          }
+        } else {
+         int wcsimid = channelkey_to_mrdpmtid.at(chankey)-1;
+         unsigned long chankey_data = mrdpmtid_to_channelkey_data[wcsimid];
+          for(int j = 0; j < (int) mrdhits_mc.size(); j++){
+            fMRDHitT.push_back(mrdhits_mc.at(j).GetTime());
+            fMRDHitDetID.push_back(detkey);
+            fMRDHitChankey.push_back(chankey_data);
+            fMRDHitChankeyMC.push_back(chankey);
+          }
         }
+      }
+      if (IsData){
+        it_mrd_data++; 
+        if (it_mrd_data == (*TDCData).end()) loop_mrd = false;
+      } else {
+        it_mrd_mc++;
+        if (it_mrd_mc == (*TDCData_MC).end()) loop_mrd = false;
       }
     }
   }
@@ -1036,9 +1207,12 @@ int PhaseIITreeMaker::LoadMRDTrackReco(int SubEventID) {
   return NumClusterTracks;
 }
 
-void PhaseIITreeMaker::LoadAllTankHits() {
+void PhaseIITreeMaker::LoadAllTankHits(bool IsData) {
   std::map<unsigned long, std::vector<Hit>>* Hits = nullptr;
-  bool got_hits = m_data->Stores["ANNIEEvent"]->Get("Hits", Hits);
+  std::map<unsigned long, std::vector<MCHit>>* MCHits = nullptr;
+  bool got_hits = false;
+  if (IsData) got_hits = m_data->Stores["ANNIEEvent"]->Get("Hits", Hits);
+  else got_hits = m_data->Stores["ANNIEEvent"]->Get("MCHits",MCHits);
   if (!got_hits){
     std::cout << "No Hits store in ANNIEEvent. Continuing to build tree " << std::endl;
     return;
@@ -1048,27 +1222,73 @@ void PhaseIITreeMaker::LoadAllTankHits() {
   double tank_center_y = detector_center.Y();
   double tank_center_z = detector_center.Z();
   fNHits = 0;
-  for(std::pair<unsigned long, std::vector<Hit>>&& apair : *Hits){
-    unsigned long channel_key = apair.first;
+
+  std::map<unsigned long,std::vector<Hit>>::iterator it_tank_data;
+  std::map<unsigned long,std::vector<MCHit>>::iterator it_tank_mc;
+  if (IsData) it_tank_data = (*Hits).begin();
+  else it_tank_mc = (*MCHits).begin();
+  bool loop_tank = true;
+  int mchits_size = MCHits->size();
+  if (mchits_size == 0) loop_tank = false;
+
+  while (loop_tank){
+  //for(std::pair<unsigned long, std::vector<Hit>>&& apair : *Hits){
+    unsigned long channel_key;
+    if (IsData) channel_key = it_tank_data->first;
+    else channel_key = it_tank_mc->first;
+    Detector* this_detector = geom->ChannelToDetector(channel_key);
+    Position det_position = this_detector->GetDetectorPosition();
+    unsigned long detkey = this_detector->GetDetectorID();
+    int wcsimid = channelkey_to_pmtid.at(channel_key);
+    unsigned long channel_key_data = pmtid_to_channelkey[wcsimid];
     std::map<int, double>::iterator it = ChannelKeyToSPEMap.find(channel_key);
-    if(it != ChannelKeyToSPEMap.end()){ //Charge to SPE conversion is available
-      std::vector<Hit>& ThisPMTHits = apair.second;
-      fNHits+=ThisPMTHits.size();
-      for (Hit &ahit : ThisPMTHits){
-        double hit_charge = ahit.GetCharge();
-        double hit_PE  = hit_charge / ChannelKeyToSPEMap.at(channel_key);
-        Detector* this_detector = geom->ChannelToDetector(channel_key);
-        Position det_position = this_detector->GetDetectorPosition();
-        fHitX.push_back((det_position.X()-tank_center_x));
-        fHitY.push_back((det_position.Y()-tank_center_y));
-        fHitZ.push_back((det_position.Z()-tank_center_z));
-        fHitT.push_back(ahit.GetTime());
-        fHitQ.push_back(hit_charge);
-        fHitPE.push_back(hit_PE);
-        fHitDetID.push_back(ahit.GetTubeId());
-        fHitChankey.push_back(channel_key);
-        fHitType.push_back(RecoDigit::PMT8inch); // 0 For PMTs
+    std::map<int, double>::iterator it_mc = ChannelKeyToSPEMap.find(channel_key_data);
+    bool SPE_available = true;
+    if (IsData) SPE_available = (it != ChannelKeyToSPEMap.end());
+    else SPE_available = (it_mc != ChannelKeyToSPEMap.end());
+    if(SPE_available){ //Charge to SPE conversion is available
+      if (IsData){
+        std::vector<Hit> ThisPMTHits = it_tank_data->second;
+        fNHits+=ThisPMTHits.size();
+        for (Hit &ahit : ThisPMTHits){
+          double hit_charge = ahit.GetCharge();
+          double hit_PE  = hit_charge / ChannelKeyToSPEMap.at(channel_key);
+          fHitX.push_back((det_position.X()-tank_center_x));
+          fHitY.push_back((det_position.Y()-tank_center_y));
+          fHitZ.push_back((det_position.Z()-tank_center_z));
+          fHitT.push_back(ahit.GetTime());
+          fHitQ.push_back(hit_charge);
+          fHitPE.push_back(hit_PE);
+          fHitDetID.push_back(detkey);
+          fHitChankey.push_back(channel_key);
+          fHitChankeyMC.push_back(channel_key);
+          fHitType.push_back(RecoDigit::PMT8inch); // 0 For PMTs
+        }
+      } else {
+        std::vector<MCHit> ThisPMTHits = it_tank_mc->second;
+        fNHits+=ThisPMTHits.size();
+        for (MCHit &ahit : ThisPMTHits){
+          double hit_PE = ahit.GetCharge();
+          double hit_charge  = hit_PE * ChannelKeyToSPEMap.at(channel_key_data);
+          fHitX.push_back((det_position.X()-tank_center_x));
+          fHitY.push_back((det_position.Y()-tank_center_y));
+          fHitZ.push_back((det_position.Z()-tank_center_z));
+          fHitT.push_back(ahit.GetTime());
+          fHitQ.push_back(hit_charge);
+          fHitPE.push_back(hit_PE);
+          fHitDetID.push_back(detkey);
+          fHitChankey.push_back(channel_key_data);
+          fHitChankeyMC.push_back(channel_key);
+          fHitType.push_back(RecoDigit::PMT8inch); // 0 For PMTs
+        }
       }
+    }
+    if (IsData) {
+      it_tank_data++;
+      if (it_tank_data == (*Hits).end()) loop_tank = false;
+    } else {
+      it_tank_mc++;
+      if (it_tank_mc == (*MCHits).end()) loop_tank = false;
     }
   }
   return;
@@ -1195,11 +1415,12 @@ bool PhaseIITreeMaker::FillMCTruthInfo() {
   	", MCTrigger "+ to_string(fMCTriggerNum) + ", EventNumber " + to_string(fEventNumber);
   Log(logmessage, v_message, verbosity);
  
-
+  fiMCTriggerNum = (int) fMCTriggerNum;
 
   RecoVertex* truevtx = 0;
   auto get_muonMC = m_data->Stores.at("RecoEvent")->Get("TrueVertex",truevtx);
   auto get_muonMCEnergy = m_data->Stores.at("RecoEvent")->Get("TrueMuonEnergy",fTrueMuonEnergy);
+  auto get_pdg = m_data->Stores.at("RecoEvent")->Get("PdgPrimary",fTruePrimaryPdg);
   if(get_muonMC && get_muonMCEnergy){ 
     fTrueVtxX = truevtx->GetPosition().X();
     fTrueVtxY = truevtx->GetPosition().Y();
@@ -1297,7 +1518,7 @@ void PhaseIITreeMaker::RecoSummary() {
   std::cout << "============================================================================"<<std::endl;
   std::cout << " Event number " << fEventNumber << std::endl;
   std::cout << "  trueVtx=(" << fTrueVtxX << ", " << fTrueVtxY << ", " << fTrueVtxZ <<", "<< fTrueVtxTime<< std::endl
-            << " TrueMuonEnergy= " << fTrueMuonEnergy << std::endl
+            << " TrueMuonEnergy= " << fTrueMuonEnergy << " Primary Pdg = " << fTruePrimaryPdg << std::endl
             << "           " << fTrueDirX << ", " << fTrueDirY << ", " << fTrueDirZ << ") " << std::endl;
   std::cout << "  recoVtx=(" << fRecoVtxX << ", " << fRecoVtxY << ", " << fRecoVtxZ <<", "<< fRecoVtxTime << std::endl
             << "           " << fRecoDirX << ", " << fRecoDirY << ", " << fRecoDirZ << ") " << std::endl;

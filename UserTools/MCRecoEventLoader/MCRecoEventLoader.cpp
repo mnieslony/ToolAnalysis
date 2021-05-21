@@ -143,6 +143,7 @@ void MCRecoEventLoader::FindTrueVertexFromMC() {
   }
   if(not mufound){
     Log("MCRecoEventLoader::  Tool: No muon in this event",v_warning,verbosity);
+    m_data->Stores.at("RecoEvent")->Set("PdgPrimary",-9999);
     return;
   }
   

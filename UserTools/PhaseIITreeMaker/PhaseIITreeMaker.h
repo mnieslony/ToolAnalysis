@@ -39,25 +39,35 @@ class PhaseIITreeMaker: public Tool {
   bool FillMCTruthInfo();
   bool FillTankRecoInfo();
   int LoadMRDTrackReco(int SubEventNumber);
-  void LoadAllMRDHits();
+  void LoadAllMRDHits(bool IsData);
   void FillRecoDebugInfo();
   void FillTruthRecoDiffInfo(bool got_mc, bool got_reco);
 
   /// \brief Summary of Reconstructed vertex
   void RecoSummary();
   void LoadTankClusterHits(std::vector<Hit> cluster_hits);
+  void LoadTankClusterHitsMC(std::vector<MCHit> cluster_hits,std::vector<unsigned long> cluster_detkeys);
   bool LoadTankClusterClassifiers(double cluster_time);
-  void LoadAllTankHits();
+  void LoadAllTankHits(bool IsData);
   void LoadSiPMHits();
 
  private:
 
+  //General variables
+  bool isData;
+
   std::map<int,std::string>* AuxChannelNumToTypeMap;
   std::map<int,double> ChannelKeyToSPEMap;
 
-   /// \brief Reset all variables. 
-   void ResetVariables();
- 	
+  std::map<int,unsigned long> pmtid_to_channelkey;
+  std::map<unsigned long, int> channelkey_to_pmtid;
+  std::map<unsigned long, int> channelkey_to_mrdpmtid;
+  std::map<int, unsigned long> mrdpmtid_to_channelkey_data;
+  std::map<unsigned long, int> channelkey_to_faccpmtid;
+  std::map<int, unsigned long> faccpmtid_to_channelkey_data;
+
+  /// \brief Reset all variables. 
+  void ResetVariables();	
  	
   /// \brief ROOT TFile that will be used to store the output from this tool
   TFile* fOutput_tfile = nullptr;
@@ -68,6 +78,7 @@ class PhaseIITreeMaker: public Tool {
   TTree* fPhaseIIMRDClusterTree = nullptr;
  
   std::map<double,std::vector<Hit>>* m_all_clusters = nullptr;  
+  std::map<double,std::vector<MCHit>>* m_all_clusters_MC = nullptr;  
   std::map<double,std::vector<unsigned long>>* m_all_clusters_detkeys = nullptr;  
   Geometry *geom = nullptr;
 
@@ -112,16 +123,20 @@ class PhaseIITreeMaker: public Tool {
   std::vector<int> fHitType;
   std::vector<int> fHitDetID;
   std::vector<int> fHitChankey;
+  std::vector<int> fHitChankeyMC;
 
   // MRD hit info 
   int fVetoHit;
   std::vector<double> fMRDHitT;
   std::vector<int> fMRDHitDetID;
   std::vector<int> fMRDHitChankey;
+  std::vector<int> fMRDHitChankeyMC;
   std::vector<double> fFMVHitT;
   std::vector<int> fFMVHitDetID;
   std::vector<int> fFMVHitChankey;
+  std::vector<int> fFMVHitChankeyMC;
   std::map<unsigned long,vector<Hit>>* TDCData=nullptr;
+  std::map<unsigned long,vector<MCHit>>* TDCData_MC=nullptr;
 
   // ************** MRD Cluster level information ********** //
   int fMRDClusterNumber;
@@ -184,6 +199,7 @@ class PhaseIITreeMaker: public Tool {
   // ************ MC Truth Information **************** //
   uint64_t fMCEventNum;
   uint16_t fMCTriggerNum;
+  int fiMCTriggerNum;
   // True muon
   double fTrueVtxX;
   double fTrueVtxY;
@@ -195,6 +211,7 @@ class PhaseIITreeMaker: public Tool {
   double fTrueAngle;
   double fTruePhi;
   double fTrueMuonEnergy;
+  int fTruePrimaryPdg;
   double fTrueTrackLengthInWater; 
   double fTrueTrackLengthInMRD; 
 

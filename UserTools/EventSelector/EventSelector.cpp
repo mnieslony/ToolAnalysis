@@ -315,7 +315,7 @@ bool EventSelector::Execute(){
   if(fSaveStatusToStore) m_data->Stores.at("RecoEvent")->Set("EventCutStatus", fEventCutStatus);
   m_data->Stores.at("RecoEvent")->Set("EventFlagApplied", fEventApplied);
   m_data->Stores.at("RecoEvent")->Set("EventFlagged", fEventFlagged);
-
+  std::cout <<"EventCutStatus: "<<fEventCutStatus<<std::endl;
 
   return true;
 }
@@ -508,8 +508,9 @@ bool EventSelector::EventSelectionByMCTruthMRD() {
   muonStopZ = fMuonStopVertex->GetPosition().Z();
   double mrdStartZ = fGeometry->GetMrdStart()*100-168.1;
   double mrdEndZ = fGeometry->GetMrdEnd()*100-168.1;
-  double mrdHeightY = fGeometry->GetMrdHeight()*100;                                                                                     
+  double mrdHeightY = fGeometry->GetMrdHeight()*100;
   double mrdWidthX = fGeometry->GetMrdWidth()*100;
+  std::cout <<"mrdStartZ: "<<mrdStartZ<<", mrdEndZ: "<<mrdEndZ<<", mrdHeightY: "<<mrdHeightY<<", mrdWidthX: "<<mrdWidthX<<std::endl;                                                                                     
   Log("EventSelector tool: Read in MuonStop (X,Y,Z) = ("+std::to_string(muonStopX)+","+std::to_string(muonStopY)+","+std::to_string(muonStopZ)+")");
   if(muonStopZ<mrdStartZ || muonStopZ>mrdEndZ
   	|| muonStopX<-1.0*mrdWidthX || muonStopX>mrdWidthX
@@ -593,7 +594,7 @@ bool EventSelector::EventSelectionByPMTMRDCoinc() {
   m_data->Stores["RecoEvent"]->Set("PMTClustersTime",vec_pmtclusters_time,false);
   vec_mrdclusters_time->clear();
   m_data->Stores["RecoEvent"]->Set("MRDClustersTime",vec_mrdclusters_time);
-
+  std::cout <<"pmt_cluster_size: "<<pmt_cluster_size<<", mrd cluster size: "<<MrdTimeClusters.size()<<std::endl;
 
   bool prompt_cluster = false;
   double pmt_time = 0;
@@ -619,6 +620,7 @@ bool EventSelector::EventSelectionByPMTMRDCoinc() {
           max_charge = charge_temp;
           prompt_cluster = true;
           pmt_time = time_temp;
+          n_hits = int(MCHits.size());
         }
       }
     }
@@ -656,6 +658,7 @@ bool EventSelector::EventSelectionByPMTMRDCoinc() {
   m_data->Stores["RecoEvent"]->Set("PMTClustersTime",vec_pmtclusters_time,false);
 
   std::vector<double> mrd_meantimes;
+  std::cout <<"MrdTimeClusters.size(): "<<MrdTimeClusters.size()<<std::endl;
   for(unsigned int thiscluster=0; thiscluster<MrdTimeClusters.size(); thiscluster++){
  
     std::vector<int> hitmrd_times;
@@ -672,10 +675,11 @@ bool EventSelector::EventSelectionByPMTMRDCoinc() {
         hitmrd_times.push_back(mrdtimes);
         mrd_meantime += mrdtimes;
       }
-      if (hitmrd_times.size()>0) mrd_meantime /= hitmrd_times.size();
-      mrd_meantimes.push_back(mrd_meantime);
     }
+    if (hitmrd_times.size()>0) mrd_meantime /= hitmrd_times.size();
+    mrd_meantimes.push_back(mrd_meantime);
   }
+  std::cout <<"mrd_meantimes.size(): "<<mrd_meantimes.size()<<std::endl;
 
   vec_mrdclusters_time->clear();
   for (int i=0; i<(int)mrd_meantimes.size(); i++){
@@ -697,6 +701,7 @@ bool EventSelector::EventSelectionByPMTMRDCoinc() {
     double time_diff = mrd_meantimes.at(i_mrd) - pmt_time;
     if (verbosity > 0) std::cout <<"MRD time: "<<mrd_meantimes.at(i_mrd)<<", PMT time: "<<pmt_time<<", difference: "<<time_diff<<std::endl;
     Log("EventSelector tool: MRD/Tank coincidene candidate "+std::to_string(i_mrd)+ " has time difference: "+std::to_string(time_diff),v_message,verbosity);
+    std::cout <<"max_charge: "<<max_charge<<", n_hits: "<<n_hits<<std::endl;
     if (time_diff > pmtmrd_coinc_min && time_diff < pmtmrd_coinc_max && max_charge > 200 && n_hits >= 20){
       coincidence = true;
     }
