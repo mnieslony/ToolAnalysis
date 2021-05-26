@@ -16,6 +16,7 @@ bool MCRecoEventLoader::Initialise(std::string configfile, DataModel &data){
   fGetPiKInfo = 1;
   fGetNRings = 1;
   fParticleID = 13;
+  fDoParticleSelection = 1;
   xshift = 0.;
   yshift = 14.46469;
   zshift = -168.1;
@@ -24,6 +25,7 @@ bool MCRecoEventLoader::Initialise(std::string configfile, DataModel &data){
   m_variables.Get("verbosity",verbosity);
   m_variables.Get("GetPionKaonInfo", fGetPiKInfo);
   m_variables.Get("GetNRings",fGetNRings);
+  m_variables.Get("DoParticleSelection",fDoParticleSelection);
   m_variables.Get("ParticleID", fParticleID);
   m_variables.Get("xshift", xshift);
   m_variables.Get("yshift", yshift);
@@ -39,22 +41,32 @@ bool MCRecoEventLoader::Initialise(std::string configfile, DataModel &data){
 
   // Get particle masses map from CStore (populated by MCParticleProperties tool)
   m_data->CStore.Get("PdgMassMap",pdgcodetomass);
+
+  std::map<int,double>::iterator it_map;
+  for (it_map = pdgcodetomass.begin(); it_map != pdgcodetomass.end(); it_map++){
+    int pdgcode = it_map->first;
+    int pdgmass = it_map->second;
+    double cherenkov_thr = GetCherenkovThresholdE(pdgcode);
+    pdgcodetocherenkov.emplace(pdgcode,cherenkov_thr);
+  }
   
+  //std::cout <<"PdgCherenkovMap size (MCRecoEventLoader): "<<pdgcodetocherenkov.size()<<std::endl;
+  // Set particle pdg - Cherenkov threshold map to CStore
+  m_data->CStore.Set("PdgCherenkovMap",pdgcodetocherenkov);
 
   return true;
 }
-
-
 bool MCRecoEventLoader::Execute(){
+
   /// Reset everything
   this->Reset();
 
-	// see if "ANNIEEvent" exists
-	auto get_annieevent = m_data->Stores.count("ANNIEEvent");
-	if(!get_annieevent){
-		Log("DigitBuilder Tool: No ANNIEEvent store!",v_error,verbosity); 
-		return false;
-	};
+  // see if "ANNIEEvent" exists
+  auto get_annieevent = m_data->Stores.count("ANNIEEvent");
+  if(!get_annieevent){
+    Log("DigitBuilder Tool: No ANNIEEvent store!",v_error,verbosity); 
+    return false;
+  };
 
   // Load MC Particles information for this event
   auto get_mcparticles = m_data->Stores.at("ANNIEEvent")->Get("MCParticles",
@@ -68,6 +80,7 @@ bool MCRecoEventLoader::Execute(){
 
   ///Get MC Particle information
   this->FindTrueVertexFromMC();
+  this->FindParticlePdgs();
   if (fGetPiKInfo) this->FindPionKaonCountFromMC();
 
   this->PushTrueVertex(true);
@@ -96,7 +109,7 @@ void MCRecoEventLoader::Reset() {
   TrueMuonEnergy = -9999.;
   WaterTrackLength = -9999.;
   MRDTrackLength = -9999.;
-  
+  projectedmrdhit = false;  
 }
 
 void MCRecoEventLoader::FindTrueVertexFromMC() {
@@ -111,17 +124,27 @@ void MCRecoEventLoader::FindTrueVertexFromMC() {
       MCParticle aparticle = fMCParticles->at(particlei);
       //if(v_debug<verbosity) aparticle.Print();       // print if we're being *really* verbose
       if(aparticle.GetParentPdg()!=0) continue;      // not a primary particle
-      if(aparticle.GetPdgCode()!=fParticleID) continue;       // not a muon
-      primarymuon = aparticle;                       // note the particle
-      mufound=true;                                  // note that we found it
-      m_data->Stores.at("RecoEvent")->Set("PdgPrimary",fParticleID);  //save the primary particle pdg code to the RecoEvent store
-      break;                                         // won't have more than one primary muon
+      if (fDoParticleSelection){
+        if(aparticle.GetPdgCode()!=fParticleID) continue;       // not a muon
+        primarymuon = aparticle;                       // note the particle
+        mufound=true;                                  // note that we found it
+        m_data->Stores.at("RecoEvent")->Set("PdgPrimary",fParticleID);  //save the primary particle pdg code to the RecoEvent store
+        break;                                         // won't have more than one primary muon
+      } else {
+	//Accept both electrons and muons as primary particles, if no selection is specified
+        if( aparticle.GetPdgCode()!=11 && aparticle.GetPdgCode()!=13) continue;
+	primarymuon = aparticle;
+	mufound=true;
+	m_data->Stores.at("RecoEvent")->Set("PdgPrimary",aparticle.GetPdgCode());
+	break;
+      }
     }
   } else {
     Log("MCRecoEventLoader::  Tool: No MCParticles in the event!",v_error,verbosity);
   }
   if(not mufound){
     Log("MCRecoEventLoader::  Tool: No muon in this event",v_warning,verbosity);
+    m_data->Stores.at("RecoEvent")->Set("PdgPrimary",-9999);
     return;
   }
   
@@ -264,6 +287,21 @@ void MCRecoEventLoader::FindPionKaonCountFromMC() {
 
 }
 
+void MCRecoEventLoader::FindParticlePdgs(){
+
+  std::vector<int> primary_pdgs;
+  if(fMCParticles){
+    for(unsigned int particlei=0; particlei<fMCParticles->size(); particlei++){
+      MCParticle aparticle = fMCParticles->at(particlei);
+      if(aparticle.GetParentPdg()!=0) continue;      // not a primary particle
+      int pdg_code = aparticle.GetPdgCode();
+      primary_pdgs.push_back(pdg_code);
+    }
+  }
+
+  m_data->Stores.at("RecoEvent")->Set("PrimaryPdgs",primary_pdgs);
+
+};
 
 void MCRecoEventLoader::PushTrueVertex(bool savetodisk) {
   Log("MCRecoEventLoader Tool: Push true vertex to the RecoEvent store",v_message,verbosity);
@@ -298,7 +336,9 @@ void MCRecoEventLoader::PushProjectedMrdHit(bool projectedmrdhit){
 
 double MCRecoEventLoader::GetCherenkovThresholdE(int pdg_code) {
   Log("MCRecoEventLoader Tool: GetCherenkovThresholdE",v_message,verbosity);            ///> Calculate Cherenkov threshold energies depending on particle pdg
-  double Ethr = pdgcodetomass[pdg_code]*sqrt(1+1./sqrt(n*n-1));
+  //std::cout <<"mass particle: "<<pdgcodetomass[pdg_code]<<std::endl;
+  double Ethr = pdgcodetomass[pdg_code]*sqrt(1/(1-1/(n*n)));
+  //std::cout <<"Etrh: "<<Ethr<<std::endl;
   return Ethr;
 }
 

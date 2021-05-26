@@ -130,6 +130,7 @@ bool ClusterFinder::Initialise(std::string configfile, DataModel &data){
     h_Cluster_charge_deltaT = new TH2D("h_Cluster_charge_deltaT","Cluster charges (P.E.) vs. #Delta t",AcqTimeWindow,0,AcqTimeWindow,1000,0,5);
   }
   m_all_clusters = new std::map<double,std::vector<Hit>>;
+  m_all_clusters_MC = new std::map<double,std::vector<MCHit>>;
   m_all_clusters_detkey = new std::map<double,std::vector<unsigned long>>;
 
   return true;
@@ -156,6 +157,7 @@ bool ClusterFinder::Execute(){
   v_clusters.clear();
   v_local_cluster_times.clear();
   m_all_clusters->clear();
+  m_all_clusters_MC->clear();
   m_all_clusters_detkey->clear();
 
   //----------------------------------------------------------------------------
@@ -163,8 +165,8 @@ bool ClusterFinder::Execute(){
   //----------------------------------------------------------------------------
   
   m_data->Stores["ANNIEEvent"]->Get("EventNumber", evnum);
-  m_data->Stores["ANNIEEvent"]->Get("BeamStatus", BeamStatus);
-  bool got_recoadc = m_data->Stores["ANNIEEvent"]->Get("RecoADCHits",RecoADCHits);
+  //m_data->Stores["ANNIEEvent"]->Get("BeamStatus", BeamStatus);
+  bool got_recoadc = m_data->Stores["ANNIEEvent"]->Get("RecoADCData",RecoADCHits);
 
   if (HitStoreName == "MCHits"){
     bool got_mchits = m_data->Stores["ANNIEEvent"]->Get("MCHits", MCHits);
@@ -196,7 +198,7 @@ bool ClusterFinder::Execute(){
 
   if(HitStoreName=="MCHits"){
     int vectsize = MCHits->size();
-    if (verbose > 0) std::cout <<"MCHits size: "<<vectsize<<std::endl;
+    if (verbose > 3) std::cout <<"ClusterFinder tool: MCHits size: "<<vectsize<<std::endl;
     for(std::pair<unsigned long, std::vector<MCHit>>&& apair : *MCHits){
       unsigned long chankey = apair.first;
       Detector* thistube = geom->ChannelToDetector(chankey);
@@ -204,11 +206,58 @@ bool ClusterFinder::Execute(){
       if (thistube->GetDetectorElement()=="Tank"){
         std::vector<MCHit>& ThisPMTHits = apair.second;
         PMT_ishit[detectorkey] = 1;
+        std::vector<double> hits_2ns_res;
+        std::vector<double> hits_2ns_res_charge;
+        std::vector<double> datalike_hits;
+        std::vector<double> datalike_hits_charge;
         for (MCHit &ahit : ThisPMTHits){
-          if (verbose > 2) std::cout <<"Charge "<<ahit.GetCharge()<<", time "<<ahit.GetTime()<<std::endl;
+          //std::cout <<"Key: "<<detectorkey<<", charge "<<ahit.GetCharge()<<", time "<<ahit.GetTime()<<std::endl;
+          //if (ahit.GetTime() > 2000.) std::cout <<"Found hit later than 2us! Hit time : "<<ahit.GetTime()<<", chankey: "<<chankey<<std::endl;
+          if (ahit.GetTime() < end_of_window_time_cut*AcqTimeWindow) {
+            //Make MC more like data --> combine multiple photons if they are within a 10ns range
+            //hit times can only be recorded with 2ns precision --> possible times are 0ns, 2ns, 4ns, ...
+            hits_2ns_res.push_back(2*(int(ahit.GetTime())/2.)+(int(ahit.GetTime())%2));
+            hits_2ns_res_charge.push_back(ahit.GetCharge());
+          }
         }
+	//Combine multiple MC hits to one pulse
+        std::sort(hits_2ns_res.begin(),hits_2ns_res.end());
+	for (int i_hit=0; i_hit < (int) hits_2ns_res.size(); i_hit++){
+          double hit1 = hits_2ns_res.at(i_hit);
+          if (datalike_hits.size()==0) {
+            datalike_hits.push_back(hit1);
+            datalike_hits_charge.push_back(hits_2ns_res_charge.at(i_hit));
+          }
+          else {
+            bool new_pulse = false;
+            for (int j_hit=0; j_hit < (int) datalike_hits.size(); j_hit++){
+              if (fabs(datalike_hits.at(j_hit)-hit1)<10.) {
+                new_pulse=false;
+                datalike_hits_charge.at(j_hit)+=hits_2ns_res_charge.at(i_hit);
+                break;
+              } else new_pulse=true;
+            }
+            if (new_pulse) {
+              datalike_hits.push_back(hit1);      //Only count as a new pulse if it was 10ns away from every other pulse
+              datalike_hits_charge.push_back(hits_2ns_res_charge.at(i_hit));
+            }
+          }
+        }
+
+        for (int i_hit = 0; i_hit < (int) datalike_hits.size(); i_hit++){
+          //v_hittimes.push_back(ahit.GetTime()); // fill a vector with all hit times (unsorted)
+          v_hittimes.push_back(datalike_hits.at(i_hit));
+        }
+        std::vector<int> parents = *(ThisPMTHits.at(0).GetParents());
+        ThisPMTHits.clear();
+        std::vector<MCHit> newMCHits;
+        for (int i_hit=0; i_hit < (int) datalike_hits.size(); i_hit++){
+          newMCHits.push_back(MCHit(chankey,datalike_hits.at(i_hit),datalike_hits_charge.at(i_hit),parents));
+        }
+        MCHits->at(chankey) = newMCHits;
       }
     }
+    m_data->Stores["ANNIEEvent"]->Set("MCHits",MCHits,true);
   }
 
   if(HitStoreName=="Hits"){
@@ -229,9 +278,13 @@ bool ClusterFinder::Execute(){
     }
   }
 
+  
   if (v_hittimes.size() == 0) {
     if (verbose > 1) cout << "No hits, event is skipped..." << endl;
-    return true;
+      if (HitStoreName == "Hits") m_data->CStore.Set("ClusterMap",m_all_clusters);
+      else if (HitStoreName == "MCHits") m_data->CStore.Set("ClusterMapMC",m_all_clusters_MC);
+      m_data->CStore.Set("ClusterMapDetkey",m_all_clusters_detkey);
+      return true;
   }
 
   if (verbose > 2) {
@@ -242,8 +295,8 @@ bool ClusterFinder::Execute(){
 
   // Now sort the hit time array, fill the highest time in a new array until the old array is empty
   do {
-    double max_time =0;
-    int i_max_time =0;
+    double max_time = 0;
+    int i_max_time = 0;
     for (std::vector<double>::iterator it = v_hittimes.begin(); it != v_hittimes.end(); ++it) {
       if (*it > max_time) {
         max_time = *it;
@@ -329,13 +382,13 @@ bool ClusterFinder::Execute(){
 
         // This loops erases the dummy hit times values that were flagged before so they are not used anymore by other clusters
         for(std::vector<double>::iterator itt = it->second.end()-1; itt != it->second.begin()-1; --itt) {
-          cout << "Time: " << it->first << ", hit time: " << *itt << endl;
+          if (verbose > 2) cout << "Time: " << it->first << ", hit time: " << *itt << endl;
           if (*itt == dummy_hittime_value) {
             it->second.erase(it->second.begin() + std::distance(it->second.begin(), itt)); 
             if (verbose > 2) cout << "Erasing " << it->first << " " << *itt << endl;
           }
         }
-        cout << "Erasing loop is done and new size of mini_hits is " << it->second.size() << " hits" << endl;
+        if (verbose > 2) cout << "Erasing loop is done and new size of mini_hits is " << it->second.size() << " hits" << endl;
       }
     }
   } while (true); 
@@ -346,18 +399,37 @@ bool ClusterFinder::Execute(){
     double local_cluster_charge = 0;
     double local_cluster_time = 0;
     v_local_cluster_times.clear();
-    for(std::pair<unsigned long, std::vector<Hit>>&& apair : *Hits){
-      unsigned long chankey = apair.first;
-      Detector* thistube = geom->ChannelToDetector(chankey);
-      int detectorkey = thistube->GetDetectorID();
-      if (thistube->GetDetectorElement()=="Tank"){
-        std::vector<Hit>& ThisPMTHits = apair.second;
-        PMT_ishit[detectorkey] = 1;
-        for (Hit &ahit : ThisPMTHits){
-          if (ahit.GetTime() >= *it && ahit.GetTime() <= *it + ClusterFindingWindow) {
-            local_cluster_charge += ahit.GetCharge();
-            v_local_cluster_times.push_back(ahit.GetTime());
-            cout << "Local cluster at " << *it << " and hit is " << ahit.GetTime() << endl;
+    if (HitStoreName == "Hits"){
+      for(std::pair<unsigned long, std::vector<Hit>>&& apair : *Hits){
+        unsigned long chankey = apair.first;
+        Detector* thistube = geom->ChannelToDetector(chankey);
+        int detectorkey = thistube->GetDetectorID();
+        if (thistube->GetDetectorElement()=="Tank"){
+          std::vector<Hit>& ThisPMTHits = apair.second;
+          PMT_ishit[detectorkey] = 1;
+          for (Hit &ahit : ThisPMTHits){
+            if (ahit.GetTime() >= *it && ahit.GetTime() <= *it + ClusterFindingWindow) {
+              local_cluster_charge += ahit.GetCharge();
+              v_local_cluster_times.push_back(ahit.GetTime());
+              if (verbose > 2) cout << "Local cluster at " << *it << " and hit is " << ahit.GetTime() << endl;
+            }
+          }
+        }
+      }
+    } else if (HitStoreName == "MCHits"){
+      for(std::pair<unsigned long, std::vector<MCHit>>&& apair : *MCHits){
+        unsigned long chankey = apair.first;
+        Detector* thistube = geom->ChannelToDetector(chankey);
+        int detectorkey = thistube->GetDetectorID();
+        if (thistube->GetDetectorElement()=="Tank"){
+          std::vector<MCHit>& ThisPMTHits = apair.second;
+          PMT_ishit[detectorkey] = 1;
+          for (MCHit &ahit : ThisPMTHits){
+            if (ahit.GetTime() >= *it && ahit.GetTime() <= *it + ClusterFindingWindow) {
+              local_cluster_charge += ahit.GetCharge();
+              v_local_cluster_times.push_back(ahit.GetTime());
+              if (verbose > 2) cout << "Local cluster at " << *it << " and hit is " << ahit.GetTime() << endl;
+            }
           }
         }
       }
@@ -378,31 +450,54 @@ bool ClusterFinder::Execute(){
     if (verbose > 2) cout << "Next cluster ..." << endl;
 
     // Fills the map of clusters (to be passed through CStore)
-    for(std::pair<unsigned long, std::vector<Hit>>&& apair : *Hits) {   
-      unsigned long chankey = apair.first;
-      Detector* thistube = geom->ChannelToDetector(chankey);
-      unsigned long detectorkey = thistube->GetDetectorID();
-      if (thistube->GetDetectorElement()=="Tank"){
-        std::vector<Hit>& ThisPMTHits = apair.second;
-        PMT_ishit[detectorkey] = 1;
-        for (Hit &ahit : ThisPMTHits){
-          if (ahit.GetTime() >= *it && ahit.GetTime() <= *it + ClusterFindingWindow) { 
-            if(m_all_clusters->count(local_cluster_time)==0) {
-              m_all_clusters->emplace(local_cluster_time, std::vector<Hit>{ahit});
-              m_all_clusters_detkey->emplace(local_cluster_time, std::vector<unsigned long>{detectorkey});
-            } else { 
-              m_all_clusters->at(local_cluster_time).push_back(ahit);
-              m_all_clusters_detkey->at(local_cluster_time).push_back(detectorkey);
+    if (HitStoreName == "Hits"){
+      for(std::pair<unsigned long, std::vector<Hit>>&& apair : *Hits) {   
+        unsigned long chankey = apair.first;
+        Detector* thistube = geom->ChannelToDetector(chankey);
+        unsigned long detectorkey = thistube->GetDetectorID();
+        if (thistube->GetDetectorElement()=="Tank"){
+          std::vector<Hit>& ThisPMTHits = apair.second;
+          PMT_ishit[detectorkey] = 1;
+          for (Hit &ahit : ThisPMTHits){
+            if (ahit.GetTime() >= *it && ahit.GetTime() <= *it + ClusterFindingWindow) { 
+              if(m_all_clusters->count(local_cluster_time)==0) {
+                m_all_clusters->emplace(local_cluster_time, std::vector<Hit>{ahit});
+                m_all_clusters_detkey->emplace(local_cluster_time, std::vector<unsigned long>{detectorkey});
+              } else { 
+                m_all_clusters->at(local_cluster_time).push_back(ahit);
+                m_all_clusters_detkey->at(local_cluster_time).push_back(detectorkey);
+              }
             }
-          }
-        }  
+          }  
+        }
+      }
+    } else if (HitStoreName == "MCHits"){
+      for(std::pair<unsigned long, std::vector<MCHit>>&& apair : *MCHits) {   
+        unsigned long chankey = apair.first;
+        Detector* thistube = geom->ChannelToDetector(chankey);
+        unsigned long detectorkey = thistube->GetDetectorID();
+        if (thistube->GetDetectorElement()=="Tank"){
+          std::vector<MCHit>& ThisPMTHits = apair.second;
+          PMT_ishit[detectorkey] = 1;
+          for (MCHit &ahit : ThisPMTHits){
+            if (ahit.GetTime() >= *it && ahit.GetTime() <= *it + ClusterFindingWindow) { 
+              if(m_all_clusters_MC->count(local_cluster_time)==0) {
+                m_all_clusters_MC->emplace(local_cluster_time, std::vector<MCHit>{ahit});
+                m_all_clusters_detkey->emplace(local_cluster_time, std::vector<unsigned long>{detectorkey});
+              } else { 
+                m_all_clusters_MC->at(local_cluster_time).push_back(ahit);
+                m_all_clusters_detkey->at(local_cluster_time).push_back(detectorkey);
+              }
+            }
+          }  
+        }
       }
     }
-  
   }
 
   // Load the cluster map in a CStore for use by a subsequent tool
-  m_data->CStore.Set("ClusterMap",m_all_clusters);
+  if (HitStoreName == "Hits") m_data->CStore.Set("ClusterMap",m_all_clusters);
+  else if (HitStoreName == "MCHits") m_data->CStore.Set("ClusterMapMC",m_all_clusters_MC);
   m_data->CStore.Set("ClusterMapDetkey",m_all_clusters_detkey);
 
   //check whether PMT_ishit is filled correctly

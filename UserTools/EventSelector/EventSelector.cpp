@@ -12,6 +12,7 @@ bool EventSelector::Initialise(std::string configfile, DataModel &data){
   m_data= &data; //assigning transient data pointer
   /////////////////////////////////////////////////////////////////
 
+  fPMTMRDOffset = false;
   fIsMC = true;
   fPMTMRDOffset = 745;
 
@@ -37,6 +38,9 @@ bool EventSelector::Initialise(std::string configfile, DataModel &data){
   m_variables.Get("RecoPMTVolCut", fRecoPMTVolCut);
   m_variables.Get("PMTMRDCoincCut",fPMTMRDCoincCut);
   m_variables.Get("PMTMRDOffset",fPMTMRDOffset);
+  m_variables.Get("NoVeto",fNoVetoCut);
+  m_variables.Get("Veto",fVetoCut);
+  m_variables.Get("TriggerWord",fTriggerWord);
   m_variables.Get("SaveStatusToStore", fSaveStatusToStore);
   m_variables.Get("IsMC",fIsMC);
 
@@ -55,7 +59,13 @@ bool EventSelector::Initialise(std::string configfile, DataModel &data){
     Log("EventSelector Tool: Error retrieving Geometry from ANNIEEvent!",v_error,verbosity); 
     return false; 
   }
- 
+
+  vec_pmtclusters_charge = new std::vector<double>; 
+  vec_pmtclusters_time = new std::vector<double>; 
+  vec_mrdclusters_time = new std::vector<double>; 
+
+  m_data->CStore.Get("ChannelNumToTankPMTSPEChargeMap",ChannelNumToTankPMTSPEChargeMap);
+
   return true;
 }
 
@@ -87,90 +97,147 @@ bool EventSelector::Execute(){
   }
 
   // Retrive digits from RecoEvent
-  auto get_ok = m_data->Stores.at("RecoEvent")->Get("RecoDigit",fDigitList);  ///> Get digits from "RecoEvent" 
-  if(not get_ok){
+  auto has_reco = m_data->Stores.at("RecoEvent")->Get("RecoDigit",fDigitList);  ///> Get digits from "RecoEvent" 
+  if(not has_reco){
   	Log("EventSelector  Tool: Error retrieving RecoDigits,no digit from the RecoEvent!",v_error,verbosity); 
-  	return false;
+  	/*return false;*/
   }
 
   // BEGIN CUTS USING TRUTH INFORMATION //
 
+  bool get_truevtx, get_truestopvtx;
   if (fIsMC){
     // get truth vertex information 
-    auto get_truevtx = m_data->Stores.at("RecoEvent")->Get("TrueVertex", fMuonStartVertex);
+    get_truevtx = m_data->Stores.at("RecoEvent")->Get("TrueVertex", fMuonStartVertex);
     if(!get_truevtx){ 
       Log("EventSelector Tool: Error retrieving TrueVertex from RecoEvent!",v_error,verbosity); 
       return false; 
     }
   
-    auto get_truestopvtx = m_data->Stores.at("RecoEvent")->Get("TrueStopVertex", fMuonStopVertex);
+    get_truestopvtx = m_data->Stores.at("RecoEvent")->Get("TrueStopVertex", fMuonStopVertex);
     if(!get_truestopvtx){ 
       Log("EventSelector Tool: Error retrieving TrueStopVertex from RecoEvent!",v_error,verbosity); 
       return false; 
     }
+   
+    //Get MC version of MRD hits
+    get_mrd = m_data->Stores.at("ANNIEEvent")->Get("TDCData",TDCData_MC);
+    if (!get_mrd) {
+      Log("EventSelector Tool: Error retrieving TDCData, true from ANNIEEvent!",v_error,verbosity);
+    }
+  } else {
+  
+    //Get data version of MRD hits
+    get_mrd = m_data->Stores.at("ANNIEEvent")->Get("TDCData",TDCData);
+    if (!get_mrd) {
+      Log("EventSelector Tool: Error retrieving TDCData, true from ANNIEEvent!",v_error,verbosity);
+    }
+
   }
+
+  int fTrigger;
+  auto get_trigger = m_data->Stores.at("ANNIEEvent")->Get("TriggerWord",fTrigger);
+  if (not get_trigger){
+      Log("EventSelector Tool: Error retrieving Triggerword, true from ANNIEEvent!",v_error,verbosity);
+      return false;
+  }
+
+  bool IsSingleRing = false, IsMultiRing = false, HasProjectedMRDHit = false, passNoPiK = false, passMCFVCut = false, passMCPMTCut = false, passMCMRDCut = false, IsInsideEnergyWindow = false, IsElectron = false, IsMuon = false, isPromptTrigger=false;
  
-  bool IsSingleRing = this->EventSelectionByMCSingleRing();
-  m_data->Stores.at("RecoEvent")->Set("SingleRingEvent",IsSingleRing);
+  if (fIsMC){
 
-  bool IsMultiRing = this->EventSelectionByMCMultiRing();
-  m_data->Stores.at("RecoEvent")->Set("MultiRingEvent",IsMultiRing);
+    isPromptTrigger = this->PromptTriggerCheck();
+    m_data->Stores.at("RecoEvent")->Set("PromptEvent",isPromptTrigger);
+    
+    IsSingleRing = this->EventSelectionByMCSingleRing();
+    m_data->Stores.at("RecoEvent")->Set("MCSingleRingEvent",IsSingleRing);
 
-  bool HasProjectedMRDHit = this->EventSelectionByMCProjectedMRDHit();
-  //information about projected MRD hit already stored in the RecoEvent store by MCRecoEventLoader
+    IsMultiRing = this->EventSelectionByMCMultiRing();
+    m_data->Stores.at("RecoEvent")->Set("MCMultiRingEvent",IsMultiRing);
+
+    HasProjectedMRDHit = this->EventSelectionByMCProjectedMRDHit();
+    //information about projected MRD hit already stored in the RecoEvent store by MCRecoEventLoader
+
+    passNoPiK = this->EventSelectionNoPiK();
+    m_data->Stores.at("RecoEvent")->Set("MCNoPiK",passNoPiK);
+
+    passMCFVCut = this->EventSelectionByFV(true);
+    m_data->Stores.at("RecoEvent")->Set("MCFV",passMCFVCut);
+
+    passMCPMTCut = this->EventSelectionByPMTVol(true);
+    m_data->Stores.at("RecoEvent")->Set("MCPMTVol",passMCPMTCut);
+ 
+    passMCMRDCut= this->EventSelectionByMCTruthMRD();
+    m_data->Stores.at("RecoEvent")->Set("MCMRDStop",passMCMRDCut);
+
+    IsInsideEnergyWindow = this->EnergyCutCheck(Emin,Emax);
+    m_data->Stores.at("RecoEvent")->Set("MCEnergyCut",IsInsideEnergyWindow);
+
+    IsMuon = this->ParticleCheck(13);
+    m_data->Stores.at("RecoEvent")->Set("MCIsMuon",IsMuon);
+
+    IsElectron = this->ParticleCheck(11);
+    m_data->Stores.at("RecoEvent")->Set("MCIsElectron",IsElectron);
+  }
+
+  bool HasEnoughHits = false;
+  if (has_reco){
+    HasEnoughHits = this->NHitCountCheck(fNHitmin);
+    m_data->Stores.at("RecoEvent")->Set("NHitCut",HasEnoughHits);  
+  }
+
+  bool passPMTMRDCoincCut = this->EventSelectionByPMTMRDCoinc();
+  m_data->Stores.at("RecoEvent")->Set("PMTMRDCoinc",passPMTMRDCoincCut);
+
+  bool passVetoCut = this->EventSelectionByVetoCut();
+  m_data->Stores.at("RecoEvent")->Set("NoVeto",passVetoCut);
+
+  bool passTriggerCut = this->EventSelectionByTrigger(fTrigger,fTriggerWord);
+  m_data->Stores.at("RecoEvent")->Set("TriggerCut",passTriggerCut);
 
   // Fill the EventSelection mask for the cuts that are supposed to be applied
   if (fMCPiKCut){
-    bool passNoPiK = this->EventSelectionNoPiK();
     fEventApplied |= EventSelector::kFlagMCPiK; 
     if(!passNoPiK) fEventFlagged |= EventSelector::kFlagMCPiK;
   }  
 
   if(fMCFVCut || fMCPMTVolCut){
     if (fMCFVCut){
-      bool passMCFVCut= this->EventSelectionByFV(true);
       fEventApplied |= EventSelector::kFlagMCFV; 
       if(!passMCFVCut) fEventFlagged |= EventSelector::kFlagMCFV;
     }
     if (fMCPMTVolCut){
-      bool passMCPMTCut= this->EventSelectionByPMTVol(true);
       fEventApplied |= EventSelector::kFlagMCPMTVol; 
       if(!passMCPMTCut) fEventFlagged |= EventSelector::kFlagMCPMTVol;
     }
   }
 
   if(fMCMRDCut){
-    bool passMCMRDCut= this->EventSelectionByMCTruthMRD();
     fEventApplied |= EventSelector::kFlagMCMRD; 
     if(!passMCMRDCut) fEventFlagged |= EventSelector::kFlagMCMRD;
   }
 
   if(fPromptTrigOnly){
-    bool isPromptTrigger= this->PromptTriggerCheck();
     fEventApplied |= EventSelector::kFlagPromptTrig; 
     if(!isPromptTrigger) fEventFlagged |= EventSelector::kFlagPromptTrig;
   }
 
   if(fNHitCut){
-    bool HasEnoughHits = this->NHitCountCheck(fNHitmin);
     fEventApplied |= EventSelector::kFlagNHit;
     if(!HasEnoughHits) fEventFlagged |= EventSelector::kFlagNHit;
   }
 
   if (fMCEnergyCut){
-    bool IsInsideEnergyWindow = this->EnergyCutCheck(Emin,Emax);
     fEventApplied |= EventSelector::kFlagMCEnergyCut;
     if (!IsInsideEnergyWindow) fEventFlagged |= EventSelector::kFlagMCEnergyCut;
   }
 
   if (fMCIsMuonCut){
-    bool IsMuon = this->ParticleCheck(13);
     fEventApplied |= EventSelector::kFlagMCIsMuon;
     if (!IsMuon) fEventFlagged |= EventSelector::kFlagMCIsMuon;
   }
 
   if (fMCIsElectronCut){
-    bool IsElectron = this->ParticleCheck(11);
     fEventApplied |= EventSelector::kFlagMCIsElectron;
     if (!IsElectron) fEventFlagged |= EventSelector::kFlagMCIsElectron;
   }
@@ -223,10 +290,24 @@ bool EventSelector::Execute(){
   //Fast check whether the times of MRD and PMT clusters are coincident
   if(fPMTMRDCoincCut){
     fEventApplied |= EventSelector::kFlagPMTMRDCoinc;
-    bool passPMTMRDCoincCut = this->EventSelectionByPMTMRDCoinc();
     if (!passPMTMRDCoincCut) fEventFlagged |= EventSelector::kFlagPMTMRDCoinc;
   }
 
+  if (fNoVetoCut){
+    fEventApplied |= EventSelector::kFlagNoVeto;
+    if (!passVetoCut) fEventFlagged |= EventSelector::kFlagNoVeto;
+  }
+
+  if (fVetoCut){
+    fEventApplied |= EventSelector::kFlagVeto;
+    if (passVetoCut) fEventFlagged |= EventSelector::kFlagVeto;
+  }
+
+  if (fTriggerWord > 0){
+    fEventApplied |= EventSelector::kFlagTrigger;
+    if (!passTriggerCut) fEventFlagged |= EventSelector::kFlagTrigger;
+  }
+  
   if(fEventFlagged != EventSelector::kFlagNone) fEventCutStatus = false;
   if(fEventCutStatus){  
     Log("EventSelector Tool: Event is clean according to current event selection.",v_message,verbosity);
@@ -234,12 +315,17 @@ bool EventSelector::Execute(){
   if(fSaveStatusToStore) m_data->Stores.at("RecoEvent")->Set("EventCutStatus", fEventCutStatus);
   m_data->Stores.at("RecoEvent")->Set("EventFlagApplied", fEventApplied);
   m_data->Stores.at("RecoEvent")->Set("EventFlagged", fEventFlagged);
+  std::cout <<"EventCutStatus: "<<fEventCutStatus<<std::endl;
+
   return true;
 }
 
 
 bool EventSelector::Finalise(){
   if(verbosity>0) cout<<"EventSelector exitting"<<endl;
+  delete vec_pmtclusters_charge;
+  delete vec_pmtclusters_time;
+  delete vec_mrdclusters_time;
   return true;
 }
 
@@ -283,9 +369,18 @@ bool EventSelector::NHitCountCheck(int NHitCut) {
   if(verbosity>3){
     std::cout << "SIZE OF DIGIT LIST FOR EVENT IS: " << fDigitList->size() << std::endl;
   }
-  if(int(fDigitList->size())<NHitCut) {
-		Log("EventSelector Tool: Event has less than 4 digits",v_message,verbosity);
-		return false;
+  
+  int size_pmt_digits = 0;
+
+  for (unsigned int i_digit = 0; i_digit < fDigitList->size(); i_digit++){
+    RecoDigit thisdigit = fDigitList->at(i_digit);
+    int digittype = thisdigit.GetDigitType();
+    if (digittype == 0) size_pmt_digits++;
+  }
+
+  if(size_pmt_digits<NHitCut) {
+    Log("EventSelector Tool: Event has less than 4 digits",v_message,verbosity);
+    return false;
   }
   else {
   return true;
@@ -393,8 +488,8 @@ bool EventSelector::EventSelectionByPMTVol(bool isMC) {
   checkedVtxX = vtxPos.X();
   checkedVtxY = vtxPos.Y();
   checkedVtxZ = vtxPos.Z();
-  double fidcutradius = fGeometry.GetPMTEnclosedRadius()*100.;
-  double fidcuty = fGeometry.GetPMTEnclosedHalfheight()*100.;
+  double fidcutradius = fGeometry->GetPMTEnclosedRadius()*100.;
+  double fidcuty = fGeometry->GetPMTEnclosedHalfheight()*100.;
   if( (TMath::Sqrt(TMath::Power(checkedVtxX, 2) + TMath::Power(checkedVtxZ,2)) > fidcutradius) 
   	  || (TMath::Abs(checkedVtxY) > fidcuty)){
   Log("EventSelector Tool: This event is not contained within the PMT volume",v_message,verbosity); 
@@ -411,10 +506,11 @@ bool EventSelector::EventSelectionByMCTruthMRD() {
   muonStopX = fMuonStopVertex->GetPosition().X();
   muonStopY = fMuonStopVertex->GetPosition().Y();
   muonStopZ = fMuonStopVertex->GetPosition().Z();
-  double mrdStartZ = fGeometry.GetMrdStart()*100-168.1;
-  double mrdEndZ = fGeometry.GetMrdEnd()*100-168.1;
-  double mrdHeightY = fGeometry.GetMrdHeight()*100;                                                                                     
-  double mrdWidthX = fGeometry.GetMrdWidth()*100;
+  double mrdStartZ = fGeometry->GetMrdStart()*100-168.1;
+  double mrdEndZ = fGeometry->GetMrdEnd()*100-168.1;
+  double mrdHeightY = fGeometry->GetMrdHeight()*100;
+  double mrdWidthX = fGeometry->GetMrdWidth()*100;
+  std::cout <<"mrdStartZ: "<<mrdStartZ<<", mrdEndZ: "<<mrdEndZ<<", mrdHeightY: "<<mrdHeightY<<", mrdWidthX: "<<mrdWidthX<<std::endl;                                                                                     
   Log("EventSelector tool: Read in MuonStop (X,Y,Z) = ("+std::to_string(muonStopX)+","+std::to_string(muonStopY)+","+std::to_string(muonStopZ)+")");
   if(muonStopZ<mrdStartZ || muonStopZ>mrdEndZ
   	|| muonStopX<-1.0*mrdWidthX || muonStopX>mrdWidthX
@@ -471,8 +567,13 @@ bool EventSelector::EventSelectionByMCProjectedMRDHit() {
 
 bool EventSelector::EventSelectionByPMTMRDCoinc() {
 
-  bool has_clustered_pmt = m_data->CStore.Get("ClusterMap",m_all_clusters);
-  if (not has_clustered_pmt) { Log("EventSelector Tool: Error retrieving ClusterMap from CStore, did you run ClusterFinder beforehand?",v_error,verbosity); return false; }
+  if (fIsMC){
+    bool has_clustered_pmt = m_data->CStore.Get("ClusterMapMC",m_all_clusters_MC);
+    if (not has_clustered_pmt) { Log("EventSelector Tool: Error retrieving ClusterMapMC from CStore, did you run ClusterFinder beforehand?",v_error,verbosity); return false; }
+  } else {
+    bool has_clustered_pmt = m_data->CStore.Get("ClusterMap",m_all_clusters);
+    if (not has_clustered_pmt) { Log("EventSelector Tool: Error retrieving ClusterMap from CStore, did you run ClusterFinder beforehand?",v_error,verbosity); return false; }
+  }
 
   bool has_clustered_mrd = m_data->CStore.Get("MrdTimeClusters",MrdTimeClusters);
   if (not has_clustered_mrd) { Log("EventSelector Tool: Error retrieving MrdTimeClusters map from CStore, did you run TimeClustering beforehand?",v_error,verbosity); return false; }
@@ -482,36 +583,82 @@ bool EventSelector::EventSelectionByPMTMRDCoinc() {
     has_clustered_mrd = m_data->CStore.Get("MrdDigitChankeys",MrdDigitChankeys);
     if (not has_clustered_mrd) { Log("EventDisplay Tool: Error retrieving MrdDigitChankeys, did you run TimeClustering beforehand",v_error,verbosity); return false;}
   }
-
-  if (MrdTimeClusters.size() == 0 || m_all_clusters->size() == 0){
-    return false;
-  }
+  
+  int pmt_cluster_size;
+  if (fIsMC) pmt_cluster_size = (int) m_all_clusters_MC->size();
+  else pmt_cluster_size = (int) m_all_clusters->size();
+  m_data->Stores["RecoEvent"]->Set("NumPMTClusters",pmt_cluster_size);
+  vec_pmtclusters_charge->clear();
+  vec_pmtclusters_time->clear();
+  m_data->Stores["RecoEvent"]->Set("PMTClustersCharge",vec_pmtclusters_charge,false);
+  m_data->Stores["RecoEvent"]->Set("PMTClustersTime",vec_pmtclusters_time,false);
+  vec_mrdclusters_time->clear();
+  m_data->Stores["RecoEvent"]->Set("MRDClustersTime",vec_mrdclusters_time);
+  std::cout <<"pmt_cluster_size: "<<pmt_cluster_size<<", mrd cluster size: "<<MrdTimeClusters.size()<<std::endl;
 
   bool prompt_cluster = false;
   double pmt_time = 0;
+  double max_charge = 0;
+  int n_hits = 0;
 
-  if (m_all_clusters->size()){
-    double max_charge = 0;
-    double cluster_time;
-    for(std::pair<double,std::vector<Hit>>&& apair : *m_all_clusters){
-      std::vector<Hit>&Hits = apair.second;
-      double time_temp = 0;
-      double charge_temp = 0;
-      for (unsigned int i_hit = 0; i_hit < Hits.size(); i_hit++){
-        time_temp+=Hits.at(i_hit).GetTime();
-        charge_temp+=Hits.at(i_hit).GetCharge();
+  if (fIsMC){
+    if (m_all_clusters_MC->size()){
+      double cluster_time;
+      for(std::pair<double,std::vector<MCHit>>&& apair : *m_all_clusters_MC){
+        std::vector<MCHit>&MCHits = apair.second;
+        double time_temp = 0;
+        double charge_temp = 0;
+        for (unsigned int i_hit = 0; i_hit < MCHits.size(); i_hit++){
+          time_temp+=MCHits.at(i_hit).GetTime();
+          charge_temp+=MCHits.at(i_hit).GetCharge();
+        }
+        if (MCHits.size()>0) time_temp/=MCHits.size();
+        vec_pmtclusters_charge->push_back(charge_temp);
+        vec_pmtclusters_time->push_back(time_temp);
+        if (time_temp > 2000.) continue;	//not a prompt event
+        if (charge_temp > max_charge){
+          max_charge = charge_temp;
+          prompt_cluster = true;
+          pmt_time = time_temp;
+          n_hits = int(MCHits.size());
+        }
       }
-      if (Hits.size()>0) time_temp/=Hits.size();
-      if (time_temp > 2000.) continue;	//not a prompt event
-      if (charge_temp > max_charge){
-        max_charge = charge_temp;
-        prompt_cluster = true;
-        pmt_time = time_temp;
+    }
+  } else {
+    if (m_all_clusters->size()){
+      double cluster_time;
+      for(std::pair<double,std::vector<Hit>>&& apair : *m_all_clusters){
+        std::vector<Hit>&Hits = apair.second;
+        double time_temp = 0;
+        double charge_temp = 0;
+        for (unsigned int i_hit = 0; i_hit < Hits.size(); i_hit++){
+          time_temp+=Hits.at(i_hit).GetTime();
+          int tube = Hits.at(i_hit).GetTubeId();
+          double charge_pe = Hits.at(i_hit).GetCharge()/ChannelNumToTankPMTSPEChargeMap->at(tube);
+          charge_temp+=charge_pe;
+        }
+        if (Hits.size()>0) time_temp/=Hits.size();
+        vec_pmtclusters_charge->push_back(charge_temp);
+        vec_pmtclusters_time->push_back(time_temp);
+        if (time_temp > 2000.) continue;	//not a prompt event
+        if (charge_temp > max_charge){
+          max_charge = charge_temp;
+          prompt_cluster = true;
+          pmt_time = time_temp;
+          n_hits = int(Hits.size());
+        }
       }
     }
   }
 
+  std::cout <<"Maximum charge in PMT cluster: "<<max_charge<<std::endl;
+  std::cout <<"Number of PMT hits in muon cluster: "<<n_hits<<std::endl;
+
+  m_data->Stores["RecoEvent"]->Set("PMTClustersCharge",vec_pmtclusters_charge,false);
+  m_data->Stores["RecoEvent"]->Set("PMTClustersTime",vec_pmtclusters_time,false);
+
   std::vector<double> mrd_meantimes;
+  std::cout <<"MrdTimeClusters.size(): "<<MrdTimeClusters.size()<<std::endl;
   for(unsigned int thiscluster=0; thiscluster<MrdTimeClusters.size(); thiscluster++){
  
     std::vector<int> hitmrd_times;
@@ -521,31 +668,117 @@ bool EventSelector::EventSelectionByPMTMRDCoinc() {
     for(int thisdigit=0;thisdigit<numdigits;thisdigit++){
       int digit_value = single_mrdcluster.at(thisdigit);
       unsigned long chankey = MrdDigitChankeys.at(digit_value);
-      Detector *thedetector = fGeometry.ChannelToDetector(chankey);
+      Detector *thedetector = fGeometry->ChannelToDetector(chankey);
       unsigned long detkey = thedetector->GetDetectorID();
       if (thedetector->GetDetectorElement()=="MRD") {
         double mrdtimes=MrdDigitTimes.at(digit_value);
         hitmrd_times.push_back(mrdtimes);
         mrd_meantime += mrdtimes;
       }
-      if (hitmrd_times.size()>0) mrd_meantime /= hitmrd_times.size();
-      mrd_meantimes.push_back(mrd_meantime);
     }
+    if (hitmrd_times.size()>0) mrd_meantime /= hitmrd_times.size();
+    mrd_meantimes.push_back(mrd_meantime);
+  }
+  std::cout <<"mrd_meantimes.size(): "<<mrd_meantimes.size()<<std::endl;
+
+  vec_mrdclusters_time->clear();
+  for (int i=0; i<(int)mrd_meantimes.size(); i++){
+    vec_mrdclusters_time->push_back(mrd_meantimes.at(i));
+  }
+  m_data->Stores["RecoEvent"]->Set("MRDClustersTime",vec_mrdclusters_time);
+  
+  if (fIsMC){
+    if (MrdTimeClusters.size() == 0 || m_all_clusters_MC->size() == 0) return false;
+  } else {
+    if (MrdTimeClusters.size() == 0 || m_all_clusters->size() == 0) return false;
   }
 
-  double pmtmrd_coinc_min = fPMTMRDOffset - 50;
-  double pmtmrd_coinc_max = fPMTMRDOffset + 50;
+  pmtmrd_coinc_min = fPMTMRDOffset - 50;
+  pmtmrd_coinc_max = fPMTMRDOffset + 50;
 
   bool coincidence = false;
   for (int i_mrd = 0; i_mrd < int(mrd_meantimes.size()); i_mrd++){
     double time_diff = mrd_meantimes.at(i_mrd) - pmt_time;
-    std::cout <<"i_mrd: "<<i_mrd<<", time_diff: "<<time_diff<<std::endl;
-    if (time_diff > pmtmrd_coinc_min && time_diff < pmtmrd_coinc_max){
+    if (verbosity > 0) std::cout <<"MRD time: "<<mrd_meantimes.at(i_mrd)<<", PMT time: "<<pmt_time<<", difference: "<<time_diff<<std::endl;
+    Log("EventSelector tool: MRD/Tank coincidene candidate "+std::to_string(i_mrd)+ " has time difference: "+std::to_string(time_diff),v_message,verbosity);
+    std::cout <<"max_charge: "<<max_charge<<", n_hits: "<<n_hits<<std::endl;
+    if (time_diff > pmtmrd_coinc_min && time_diff < pmtmrd_coinc_max && max_charge > 200 && n_hits >= 20){
       coincidence = true;
     }
   }
 
   return coincidence;
+
+}
+
+bool EventSelector::EventSelectionByVetoCut(){
+
+ bool has_veto = false;
+ if (fIsMC) {
+    if (get_mrd){
+    if(TDCData_MC){
+    if (TDCData_MC->size()==0){
+      Log("EventSelector tool: TDC data is empty in this event.",v_message,verbosity);
+    } else {
+      for (auto&& anmrdpmt : (*TDCData_MC)){
+        unsigned long chankey = anmrdpmt.first;
+        Detector* thedetector = fGeometry->ChannelToDetector(chankey);
+        unsigned long detkey = thedetector->GetDetectorID();
+        if (thedetector->GetDetectorElement()=="Veto") {
+          std::vector<MCHit> fmv_hits = anmrdpmt.second;
+          for (int i_hit=0; i_hit < fmv_hits.size(); i_hit++){
+            MCHit fmv_hit = fmv_hits.at(i_hit);
+            double time_diff = fmv_hit.GetTime()-pmt_time;
+            if (time_diff > (pmtmrd_coinc_min) && time_diff < (pmtmrd_coinc_max)){
+              has_veto = true;
+           }
+          }
+        }
+      }
+    }
+  } else {
+    Log("EventSelector tool: No TDC data available in this event.",v_message,verbosity);
+  }
+ }
+}
+else {
+  if (get_mrd){
+  if(TDCData){
+    if (TDCData->size()==0){
+      Log("EventSelector tool: TDC data is empty in this event.",v_message,verbosity);
+    } else {
+      for (auto&& anmrdpmt : (*TDCData)){
+        unsigned long chankey = anmrdpmt.first;
+        Detector* thedetector = fGeometry->ChannelToDetector(chankey);
+        unsigned long detkey = thedetector->GetDetectorID();
+        if (thedetector->GetDetectorElement()=="Veto") {
+          std::vector<Hit> fmv_hits = anmrdpmt.second;
+          for (int i_hit=0; i_hit < fmv_hits.size(); i_hit++){
+            Hit fmv_hit = fmv_hits.at(i_hit);
+            double time_diff = fmv_hit.GetTime()-pmt_time;
+            if (time_diff > (pmtmrd_coinc_min+50) && time_diff < (pmtmrd_coinc_max+50)){
+              has_veto = true;
+           }
+          }
+        }
+      }
+    }
+  } else {
+    Log("EventSelector tool: No TDC data available in this event.",v_message,verbosity);
+  }
+  }
+  }
+
+  return (!has_veto);	//Successful selection means no veto hit 
+
+}
+
+bool EventSelector::EventSelectionByTrigger(int current_trigger, int reference_trigger){
+
+  bool correct_triggerword = false;
+  if (reference_trigger == current_trigger) correct_triggerword = true;
+  std::cout <<"current_trigger: "<<current_trigger<<", reference trigger: "<<reference_trigger<<", correct_trigger: "<<correct_triggerword<<std::endl;
+  return correct_triggerword;
 
 }
 
