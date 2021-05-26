@@ -47,7 +47,8 @@ class EventSelector: public Tool {
    kFlagMCEnergyCut   = 0x4000, //16384
    kFlagPMTMRDCoinc   = 0x8000, //32768
    kFlagNoVeto        = 0x10000, //65536
-   kFlagVeto        = 0x20000 //131072
+   kFlagVeto        = 0x20000, //131072
+   kFlagTrigger      = 0x40000
   } EventFlags_t;
 
  private:
@@ -150,7 +151,14 @@ class EventSelector: public Tool {
   /// This event selection criteria requires that no veto paddles
   /// of the Front Muon Veto fired during the event
   bool EventSelectionByVetoCut();
-  
+ 
+  /// \brief Event selection by requiring specific triggerword
+  ////
+  /// This event selection criteria requires that the specified triggerword
+  /// is present for this event
+  bool EventSelectionByTrigger(int current_trigger, int reference_trigger);
+
+
   /// \brief MC entry number
   uint64_t fMCEventNum;
   
@@ -179,6 +187,7 @@ class EventSelector: public Tool {
   std::vector<double> *vec_pmtclusters_charge = nullptr;
   std::vector<double> *vec_pmtclusters_time = nullptr;
   std::vector<double> *vec_mrdclusters_time = nullptr;
+  std::map<int,double>* ChannelNumToTankPMTSPEChargeMap = nullptr;   ///< PMT SPE Gain Map
 
   //verbosity initialization
   int verbosity=1;
@@ -208,7 +217,12 @@ class EventSelector: public Tool {
   bool fVetoCut = false;
   bool fEventCutStatus;
   bool fIsMC; 
+  int fTriggerWord;
 
+  bool get_mrd;
+  double pmt_time = 0; 
+  double pmtmrd_coinc_min = 0; 
+  double pmtmrd_coinc_max = 0;
   
   bool fSaveStatusToStore = true;
   /// \brief verbosity levels: if 'verbosity' < this level, the message type will be logged.

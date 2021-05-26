@@ -61,6 +61,13 @@ class MCRecoEventLoader: public Tool {
  	
   void FindPionKaonCountFromMC();
 
+  /// \brief Find all primary particle pdgs
+  ///
+  /// Loop over all MC particles with parent ID = 0 (primaries) and 
+  /// store their pdg numbers in a vector
+   
+  void FindParticlePdgs();
+
   /// \brief GetCherenkovThresholdE
   /// Get Cherenkov threshold energy for a given particle PDG number code
 

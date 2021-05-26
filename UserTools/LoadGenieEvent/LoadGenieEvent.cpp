@@ -185,12 +185,14 @@ bool LoadGenieEvent::Execute(){
 	if (manualmatch){
 		uint16_t MCTriggernum;
 		m_data->Stores["ANNIEEvent"]->Get("MCTriggernum",MCTriggernum);
-		if (MCTriggernum != 0){
+                std::cout <<"MCTriggernum: "<<MCTriggernum<<std::endl;
+		/*if (MCTriggernum != 0){
 			m_data->CStore.Set("NewGENIEEntry",false);	
 			return true;	//Don't evaluate new GENIE event for dealyed WCSim triggers
 		} else {
 			m_data->CStore.Set("NewGENIEEntry",true);
-		}
+		}*/
+		m_data->CStore.Set("NewGENIEEntry",true);
 	}
 	tchainentrynum++;
 	
@@ -714,7 +716,7 @@ std::string LoadGenieEvent::MediumToString(int code){
 	if(mediummap.count(code)!=0){
 		return mediummap.at(code);
 	} else {
-		cerr<<"unknown medium "<<code<<endl;
+		Log("LoadGenieEvent: unknown medium "+std::to_string(code),v_warning,verbosity);
 		return std::to_string(code);
 	}
 }
